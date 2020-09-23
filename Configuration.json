@@ -1,0 +1,88 @@
+{
+	"paths": {
+		"path":  "/Users/babylon/Documents/Covid/Data/",
+		"data_path" : "/Users/babylon/Documents/Data/KCHData/",
+		"stats_path":  "/Users/babylon/Documents/Data/KCHData/Stats/"
+	},
+	"data": {
+		"grouping": "PatientID",
+		"ordering": "Hour",
+
+		"static_columns": [
+             "Age",
+             "SxToAdmit",
+			 "NumComorbidities"
+		],
+
+		"dynamic_columns": [
+			"Albumin",
+			"Creatinine",
+			"C-Reactive-Protein",
+			"DiasBP",
+			"FiO2",
+			"Hb",
+			"Lymphocytes",
+			"Neutrophils",
+			"NEWS2",
+			"PLT",
+			"PO2/FIO2",
+			"SysBP",
+			"Urea",
+			"WBC"
+		],
+		"classification_outcome": [
+			"Mortality5Days",
+			"Mortality7Days",
+			"Mortality14Days",
+			"Mortality30Days",
+			"Mortality50Days",
+			"ITUAdmission5Days",
+			"ITUAdmission7Days",
+			"ITUAdmission14Days",
+			"ITUAdmission30Days",
+			"ITUAdmission50Days"
+		],
+		"regression_outcome": ["PO2/FIO2"]
+	},
+	"training": {
+		"folds": 10
+	},
+	"model": {
+		"name": "lstm-binary-classifier",
+		"loss": "binary_crossentropy",
+		"optimizer": "adam",
+		"metrics": ["accuracy"],
+		"save_dir": "/Users/babylon/Documents/Data/KCHData/Models/LSTM",
+		"layers": [
+			{
+				"type": "lstm",
+				"neurons": 100,
+				"input_timesteps": -1,
+				"input_dim": -1,
+				"return_seq": true
+			},
+			{
+				"type": "dropout",
+				"rate": 0.2
+			},
+			{
+				"type": "lstm",
+				"neurons": 100,
+				"return_seq": true
+			},
+			{
+				"type": "lstm",
+				"neurons": 100,
+				"return_seq": false
+			},
+			{
+				"type": "dropout",
+				"rate": 0.2
+			},
+			{
+				"type": "dense",
+				"activation": "sigmoid"
+			}
+		]
+	}
+}
