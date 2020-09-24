@@ -2,12 +2,14 @@
 	"paths": {
 		"path":  "/Users/babylon/Documents/Covid/Data/",
 		"data_path" : "/Users/babylon/Documents/Data/KCHData/",
-		"stats_path":  "/Users/babylon/Documents/Data/KCHData/Stats/"
+		"stats_path":  "/Users/babylon/Documents/Data/KCHData/Stats/",
+		"autoencoder_path": "Run/Autoencoders/"
 	},
 	"data": {
 		"grouping": "PatientID",
 		"ordering": "Hour",
-
+		"sequence_length": 14,
+		"batch_size": 12,
 		"static_columns": [
              "Age",
              "SxToAdmit",

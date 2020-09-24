@@ -25,12 +25,12 @@ def main():
 
         X_cols = (time_series.columns).tolist()
         X_cols.remove(outcome)
-        X_train, X_test, y_train, y_test = train_test_split(time_series[X_cols], time_series[outcome],
+        X_train, X_valid, y_train, y_valid = train_test_split(time_series[X_cols], time_series[outcome],
                                                             test_size = 0.33,
                                                             stratify = time_series[outcome],
                                                             random_state = 42)
 
-        test_ids = set([x.partition('.')[0] for x in X_test[grouping]])
+        test_ids = set([x.partition('.')[0] for x in X_valid[grouping]])
 
         #print(test_ids.intersection(time_series_nosmote[grouping] ))
         X_test1 = time_series_nosmote.loc[time_series_nosmote[grouping].isin(test_ids)]
@@ -46,7 +46,7 @@ def main():
 
         #temporal_classifier.predict( X_test1[temporal_features], X_test1[outcome])
 
-        feature_selector.predict( X_test[temporal_features], y_test)
+        feature_selector.predict( X_valid[temporal_features], y_valid)
 
         decision_maker.add_classifier(outcome+"Tmp", fs_y, fs_ths, fs_id, fs_fi)
 
@@ -67,7 +67,7 @@ def main():
 
         #temporal_classifier.predict( X_test1[temporal_features], X_test1[outcome])
 
-        temporal_classifier.predict( X_test[temporal_features], y_test)
+        temporal_classifier.predict( X_valid[temporal_features], y_valid)
 
         decision_maker.add_classifier(outcome+"Tmp", tm_y, tm_ths, tm_id, tm_fi)
 
@@ -95,17 +95,20 @@ def main():
 
         slopes_static_baseline_df = slopes_static_baseline_df.loc[:, ~slopes_static_baseline_df.columns.duplicated()]
 
-        slopes_df_test = generate_slopes ( X_test, static_features, grouping)
-        slopes_static_baseline_test_df = pd.concat([slopes_df_test, X_test[baseline_static_features]], axis=1,join='inner')
+        slopes_df_test = generate_slopes ( X_valid, static_features, grouping)
+        slopes_static_baseline_test_df = pd.concat([slopes_df_test, X_valid[baseline_static_features]], axis=1,join='inner')
         slopes_static_baseline_test_df = slopes_static_baseline_test_df.loc[:, ~slopes_static_baseline_test_df.columns.duplicated()]
 
 
         slopes_static_baseline_classifier = XGBoostClassifier(slopes_static_baseline_df, y_train, outcome, grouping)
 
         bs_y, bs_ths, bs_id, bs_fi = slopes_static_baseline_classifier.run_xgb("baseline_static_slope")
-        slopes_static_baseline_classifier.predict( slopes_static_baseline_test_df, y_test)
+        slopes_static_baseline_classifier.predict( slopes_static_baseline_test_df, y_valid)
 
         decision_maker.add_classifier(outcome+"bss", bs_y, bs_ths, bs_id, bs_fi)
+
+        ####LSTM autoencoder
+        smoted_stacked_series = pd.read_csv(timeseries_path+"SMOTEDTimeSeries/"+outcome+"StackedTimeSeries1Day.csv")
 
 if __name__ == '__main__':
     main()
