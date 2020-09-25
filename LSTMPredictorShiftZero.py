@@ -75,8 +75,12 @@ def main():
 
         autoencoder.plot_history()
         valid_x_predictions = autoencoder.predict(X_valid)
-        mse = np.mean(np.power(flatten(X_valid) - flatten(valid_x_predictions), 2), axis=1)
 
+        print(" DIMENSIONS OF X AND Y VALID: ", X_valid.shape, len(y_valid), y_valid.shape)
+        mse = np.mean(np.power(flatten(X_valid) - flatten(valid_x_predictions), 2), axis=1)
+        print(" Y VALID: ", y_valid)
+        print(" SHAPE OF Y VALID: ", y_valid.shape)
+        print("length of MSE: ", len(mse), " LENGTH OF Y VALID", len(y_valid.tolist()))
         error_df = pd.DataFrame({'Reconstruction_error' : mse,
                                  'True_class' : y_valid.tolist()})
 
@@ -93,6 +97,8 @@ def main():
         perf_df = pd.DataFrame.from_dict(perf_dict, orient='index')
         perf_df.to_csv("performancemetrics"+outcome+".csv", index=False)
 
+
+        print(" DIMENSIONS OF X AND Y TEST: ", X_test.shape, len(y_test), y_test)
 
         test_x_predictions = autoencoder.predict(X_test)
         mse = np.mean(np.power(flatten(X_test) - flatten(test_x_predictions), 2), axis=1)

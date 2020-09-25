@@ -20,26 +20,33 @@ def process_data(dynamic_series, full_series, outcome, grouping,grouping_col,  l
               dynamic_series.columns.isin(X_cols)] # converts the df to a numpy array
     input_y = dynamic_series[outcome].values
 
-    print(' SHAPES: ', input_X.shape, len(input_y))
     n_features = input_X[X_cols].shape[1] -2 # number of features
 
-    print("input X columns: ", input_X.columns)
     fold_ind, training_ind, testing_ind= stratified_group_k_fold(input_X, input_y, grouping_col, 3, seed=SEED)
-    print(" train INDICES: ", len(training_ind[0]), len(training_ind[1]))
-    print(" tESTINDICES: ", len(testing_ind[0]), len(testing_ind[1]))
-    print(" modulo", len(training_ind[0])%lookback)
-    print(" modulo", len(training_ind[1])%lookback)
+
 
     X_train = input_X.iloc[training_ind[0]]
-    print(" X TRAIN COLUMNS: ", X_train.columns)
-    #X_train = X_train.to_numpy()
     y_train = input_y[training_ind[0]]
+    aggregated_y_train = pd.DataFrame(X_train[grouping])
+    aggregated_y_train[outcome] = y_train
+    aggregated_y_train =aggregated_y_train.groupby(grouping).first()
+    y_train1 = aggregated_y_train[outcome].to_numpy()
+
     X_valid = input_X.iloc[training_ind[1]]
     y_val = input_y[training_ind[1]]
 
-    X_test = input_X.iloc[testing_ind[1]]\
-    #X_test = X_test.to_numpy()
+    aggregated_y_val= pd.DataFrame(X_valid[grouping])
+    aggregated_y_val[outcome] = y_val
+    aggregated_y_val =aggregated_y_val.groupby(grouping).first()
+    y_val1 = aggregated_y_val[outcome].to_numpy()
+
+    X_test = input_X.iloc[testing_ind[1]]
     y_test = input_y[testing_ind[1]]
+
+    aggregated_y_test= pd.DataFrame(X_test[grouping])
+    aggregated_y_test[outcome] = y_test
+    aggregated_y_test =aggregated_y_test.groupby(grouping).first()
+    y_test1 = aggregated_y_test[outcome].to_numpy()
 
     X_train_y0 = pd.DataFrame(X_train[y_train == 0])
 
@@ -75,7 +82,7 @@ def process_data(dynamic_series, full_series, outcome, grouping,grouping_col,  l
     n_features = X_train_y0.shape[2]  # 59
 
 
-    return X_train_y0, X_valid_y0, X_valid, y_val, X_test, y_test, timesteps, n_features
+    return X_train_y0, X_valid_y0, X_valid, y_val1, X_test, y_test1, timesteps, n_features
 
 def stratified_group_k_fold ( X, y, groups, k, seed=None) :
     labels_num = np.max(y) + 1
