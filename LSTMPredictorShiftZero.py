@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 
 import Models
 from Models.LSTMAutoEncoder.LSTMAutoEncoder import LSTMAutoEncoder
-from Models.LSTMAutoEncoder.Utils import flatten, process_data
+from Models.LSTMAutoEncoder.Utils import process_data, flatten
 from Models.MetaClassifier.DecisionMaker import DecisionMaker
 from Models.Metrics import performance_metrics
 import matplotlib.pyplot as plt
@@ -39,17 +39,17 @@ def main():
     ##read, impute and scale dataset
     non_smotedtime_series = pd.read_csv(timeseries_path + "TimeSeriesAggregatedUpto0.csv")
     non_smotedtime_series[dynamic_features] = impute(non_smotedtime_series, dynamic_features)
-    #normalized_timeseries = scale(non_smotedtime_series, dynamic_features)
-    dynamic_timeseries = non_smotedtime_series[dynamic_features]
-    dynamic_timeseries.insert(0, grouping, non_smotedtime_series[grouping])
+    normalized_timeseries = scale(non_smotedtime_series, dynamic_features)
+    normalized_timeseries.insert(0, grouping, non_smotedtime_series[grouping])
 
     ##start working per outcome
     for outcome in outcomes:
         decision_maker = DecisionMaker()
-        X_train_y0_scaled, X_valid_y0_scaled, X_valid_scaled, y_valid, X_test_scaled, y_test,  timesteps, n_features =\
-            process_data(dynamic_timeseries, non_smotedtime_series, outcome, grouping, lookback)
 
-        epochs = 200
+        X_train_y0, X_valid_y0, X_valid, y_valid, X_test, y_test,  timesteps, n_features =\
+            process_data(normalized_timeseries, non_smotedtime_series, outcome, grouping, non_smotedtime_series[grouping], lookback)
+
+        epochs = 100
 
         autoencoder = LSTMAutoEncoder(outcome, timesteps, n_features)
         autoencoder.summary()
@@ -63,19 +63,19 @@ def main():
                          write_graph=True,
                          write_images=True)
 
-        autoencoder.fit(X_train_y0_scaled, X_train_y0_scaled,
+        autoencoder.fit(X_train_y0, X_train_y0,
                                                         epochs,
                                                         lookback,
-                                                        X_valid_y0_scaled,
-                                                        X_valid_y0_scaled,
+                                                        X_valid_y0,
+                                                        X_valid_y0,
                                                         2)
 
         #print(distrs_percents)
         ####LSTM autoencoder
 
         autoencoder.plot_history()
-        valid_x_predictions = autoencoder.predict(X_valid_scaled)
-        mse = np.mean(np.power(flatten(X_valid_scaled) - flatten(valid_x_predictions), 2), axis=1)
+        valid_x_predictions = autoencoder.predict(X_valid)
+        mse = np.mean(np.power(flatten(X_valid) - flatten(valid_x_predictions), 2), axis=1)
 
         error_df = pd.DataFrame({'Reconstruction_error' : mse,
                                  'True_class' : y_valid.tolist()})
@@ -94,8 +94,8 @@ def main():
         perf_df.to_csv("performancemetrics"+outcome+".csv", index=False)
 
 
-        test_x_predictions = autoencoder.predict(X_test_scaled)
-        mse = np.mean(np.power(flatten(X_test_scaled) - flatten(test_x_predictions), 2), axis=1)
+        test_x_predictions = autoencoder.predict(X_test)
+        mse = np.mean(np.power(flatten(X_test) - flatten(test_x_predictions), 2), axis=1)
 
         error_df = pd.DataFrame({'Reconstruction_error' : mse,
                                  'True_class' : y_test.tolist()})

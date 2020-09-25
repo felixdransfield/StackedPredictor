@@ -30,6 +30,7 @@ lstm_running_params['n_splits'] = 10
 lstm_running_params['n_epochs'] = 1000
 lstm_running_params['patience'] = 200
 
+
 def stratified_group_k_fold ( X, y, groups, k, seed=None) :
     labels_num = np.max(y) + 1
     y_counts_per_group = defaultdict(lambda : np.zeros(labels_num))

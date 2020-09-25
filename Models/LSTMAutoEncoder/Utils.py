@@ -1,58 +1,126 @@
 import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+import random
+import pandas as pd
+from sklearn.model_selection import train_test_split, GroupShuffleSplit
+from collections import Counter, defaultdict
 
 import Models
 SEED = 123 #used to help randomly select the data points
 
-def process_data(dynamic_series, full_series, outcome, grouping, lookback):
+def process_data(dynamic_series, full_series, outcome, grouping,grouping_col,  lookback):
     # train/test and validation sets
     dynamic_series.insert(len(dynamic_series.columns), outcome, full_series[outcome])
-    dynamic_timeseries = curve_shift(dynamic_series, grouping, outcome, shift_by=lookback - 1)
-    X_cols = (dynamic_timeseries.columns).tolist()
-    X_cols.remove(outcome)
-    X_cols.remove(grouping)
+    dynamic_series[outcome] = dynamic_series[outcome].astype(int)
 
-    input_X = dynamic_timeseries.loc[:,
-              dynamic_timeseries.columns.isin(X_cols)].values  # converts the df to a numpy array
-    input_y = dynamic_timeseries[outcome].values
+    X_cols = (dynamic_series.columns).tolist()
+    #X_cols.remove(outcome)
+    #X_cols.remove(grouping)
 
-    n_features = input_X.shape[1]  # number of features
+    input_X = dynamic_series.loc[:,
+              dynamic_series.columns.isin(X_cols)] # converts the df to a numpy array
+    input_y = dynamic_series[outcome].values
 
-    X, y = temporalize(X=input_X, y=input_y, lookback=lookback)
+    print(' SHAPES: ', input_X.shape, len(input_y))
+    n_features = input_X[X_cols].shape[1] -2 # number of features
 
-    X_train, X_test, y_train, y_test = train_test_split(np.array(X), np.array(y), test_size=0.33,
-                                                        random_state=SEED, stratify=y)
-    X_train, X_valid, y_train, y_valid = train_test_split(X_train, y_train, test_size=0.33,
-                                                          random_state=SEED, stratify=y_train)
+    print("input X columns: ", input_X.columns)
+    fold_ind, training_ind, testing_ind= stratified_group_k_fold(input_X, input_y, grouping_col, 3, seed=SEED)
+    print(" train INDICES: ", len(training_ind[0]), len(training_ind[1]))
+    print(" tESTINDICES: ", len(testing_ind[0]), len(testing_ind[1]))
+    print(" modulo", len(training_ind[0])%lookback)
+    print(" modulo", len(training_ind[1])%lookback)
 
-    X_train_y0 = X_train[y_train == 0]
-    X_train_y1 = X_train[y_train == 1]
-    X_valid_y0 = X_valid[y_valid == 0]
-    X_valid_y1 = X_valid[y_valid == 1]
+    X_train = input_X.iloc[training_ind[0]]
+    print(" X TRAIN COLUMNS: ", X_train.columns)
+    #X_train = X_train.to_numpy()
+    y_train = input_y[training_ind[0]]
+    X_valid = input_X.iloc[training_ind[1]]
+    y_val = input_y[training_ind[1]]
 
-    X_train = X_train.reshape(X_train.shape[0], lookback, n_features)
-    X_train_y0 = X_train_y0.reshape(X_train_y0.shape[0], lookback, n_features)
-    X_train_y1 = X_train_y1.reshape(X_train_y1.shape[0], lookback, n_features)
-    X_valid = X_valid.reshape(X_valid.shape[0], lookback, n_features)
-    X_valid_y0 = X_valid_y0.reshape(X_valid_y0.shape[0], lookback, n_features)
-    X_valid_y1 = X_valid_y1.reshape(X_valid_y1.shape[0], lookback, n_features)
-    X_test = X_test.reshape(X_test.shape[0], lookback, n_features)
+    X_test = input_X.iloc[testing_ind[1]]\
+    #X_test = X_test.to_numpy()
+    y_test = input_y[testing_ind[1]]
 
-    scaler = StandardScaler().fit(flatten(X_train_y0))
-    X_train_y0_scaled = Models.LSTMAutoEncoder.Utils.scale(X_train_y0, scaler)
+    X_train_y0 = pd.DataFrame(X_train[y_train == 0])
 
-    a = flatten(X_train_y0_scaled)
-    print('colwise mean', np.mean(a, axis=0).round(6))
-    print('colwise variance', np.var(a, axis=0))
+    X_train_y1 = X_train.iloc[y_train == 1]
+    X_valid_y0 = X_valid.iloc[y_val == 0]
+    X_valid_y1 = X_valid.iloc[y_val == 1]
 
-    X_valid_scaled = Models.LSTMAutoEncoder.Utils.scale(X_valid, scaler)
-    X_valid_y0_scaled = Models.LSTMAutoEncoder.Utils.scale(X_valid_y0, scaler)
-    X_test_scaled = Models.LSTMAutoEncoder.Utils.scale(X_test, scaler)
+    X_train_y0 = (curve_shift(X_train_y0, grouping, outcome, shift_by=lookback - 1)).to_numpy()
+    X_train_y1 = (curve_shift(X_train_y1, grouping, outcome, shift_by=lookback - 1)).to_numpy()
+    X_valid_y0 = (curve_shift(X_valid_y0, grouping, outcome, shift_by=lookback - 1)).to_numpy()
+    X_valid_y1 = (curve_shift(X_valid_y1, grouping, outcome, shift_by=lookback - 1)).to_numpy()
 
-    timesteps = X_train_y0_scaled.shape[1]  # equal to the lookback
-    n_features = X_train_y0_scaled.shape[2]  # 59
-    return X_train_y0_scaled, X_valid_y0_scaled, X_valid_scaled, y_valid, X_test_scaled, y_test, timesteps, n_features
+    X_train = X_train.drop(grouping, axis=1)
+    X_train  =X_train.drop(outcome, axis=1)
+    X_train = X_train.to_numpy()
+    X_train = X_train.reshape(-1, lookback, n_features)
+    X_train_y0 = X_train_y0.reshape(-1, lookback, n_features)
+    X_train_y1 = X_train_y1.reshape(-1, lookback, n_features)
+
+    X_valid = X_valid.drop(grouping, axis=1)
+    X_valid  =X_valid.drop(outcome, axis=1)
+    X_valid = X_valid.to_numpy()
+    X_valid = X_valid.reshape(-1, lookback, n_features)
+    X_valid_y0 = X_valid_y0.reshape(-1, lookback, n_features)
+    X_valid_y1 = X_valid_y1.reshape(-1, lookback, n_features)
+    X_test = X_test.drop(outcome, axis=1)
+    X_test = X_test.drop(grouping, axis=1)
+    X_test = X_test.to_numpy()
+    X_test = X_test.reshape(-1, lookback, n_features)
+
+
+    timesteps = X_train_y0.shape[1]  # equal to the lookback
+    n_features = X_train_y0.shape[2]  # 59
+
+
+    return X_train_y0, X_valid_y0, X_valid, y_val, X_test, y_test, timesteps, n_features
+
+def stratified_group_k_fold ( X, y, groups, k, seed=None) :
+    labels_num = np.max(y) + 1
+    y_counts_per_group = defaultdict(lambda : np.zeros(labels_num))
+    y_distr = Counter()
+    for label, g in zip(y, groups) :
+        y_counts_per_group[g][label] += 1
+        y_distr[label] += 1
+
+    y_counts_per_fold = defaultdict(lambda : np.zeros(labels_num))
+    groups_per_fold = defaultdict(set)
+
+    def eval_y_counts_per_fold ( y_counts, fold ) :
+        y_counts_per_fold[fold] += y_counts
+        std_per_label = []
+        for label in range(labels_num) :
+            label_std = np.std([y_counts_per_fold[i][label] / y_distr[label] for i in range(k)])
+            std_per_label.append(label_std)
+        y_counts_per_fold[fold] -= y_counts
+        return np.mean(std_per_label)
+
+    groups_and_y_counts = list(y_counts_per_group.items())
+    random.Random(seed).shuffle(groups_and_y_counts)
+
+    for g, y_counts in sorted(groups_and_y_counts, key=lambda x : -np.std(x[1])) :
+        best_fold = None
+        min_eval = None
+        for i in range(k) :
+            fold_eval = eval_y_counts_per_fold(y_counts, i)
+            if min_eval is None or fold_eval < min_eval :
+                min_eval = fold_eval
+                best_fold = i
+        y_counts_per_fold[best_fold] += y_counts
+        groups_per_fold[best_fold].add(g)
+
+    all_groups = set(groups)
+    for i in range(k) :
+        train_groups = all_groups - groups_per_fold[i]
+        test_groups = groups_per_fold[i]
+
+        train_indices = [i for i, g in enumerate(groups) if g in train_groups]
+        test_indices = [i for i, g in enumerate(groups) if g in test_groups]
+
+        yield train_indices, test_indices
+
 
 def temporalize(X, y, lookback):
     '''
@@ -83,23 +151,6 @@ def temporalize(X, y, lookback):
         output_y.append(y[i + lookback + 1])
     return np.squeeze(np.array(output_X)), np.array(output_y)
 
-
-def flatten ( X ) :
-    '''
-    Flatten a 3D array.
-
-    Input
-    X            A 3D array for lstm, where the array is sample x timesteps x features.
-
-    Output
-    flattened_X  A 2D array, sample x features.
-    '''
-    flattened_X = np.empty((X.shape[0], X.shape[2]))  # sample x features array.
-    for i in range(X.shape[0]) :
-        flattened_X[i] = X[i, (X.shape[1] - 1), :]
-    return (flattened_X)
-
-
 def scale ( X, scaler ) :
     '''
     Scale 3D array.
@@ -127,6 +178,25 @@ def curve_shift ( df, grouping, outcome, shift_by ) :
             patientFrame.iloc[0:shift_by] = 0
             df.loc[df[grouping]==patient_id, outcome] = [x for x in patientFrame.values]
 
+    print(" IN CURVE SHIFT, COLUMNS: ", df.columns)
+    df = df.drop(grouping, axis=1)
+    df = df.drop(outcome, axis=1)
+    print(" IN CURVE SHIFT, COLUMNS: ", df.columns)
 
     return df
 
+
+def flatten ( X ) :
+    '''
+    Flatten a 3D array.
+
+    Input
+    X            A 3D array for lstm, where the array is sample x timesteps x features.
+
+    Output
+    flattened_X  A 2D array, sample x features.
+    '''
+    flattened_X = np.empty((X.shape[0], X.shape[2]))  # sample x features array.
+    for i in range(X.shape[0]) :
+        flattened_X[i] = X[i, (X.shape[1] - 1), :]
+    return (flattened_X)

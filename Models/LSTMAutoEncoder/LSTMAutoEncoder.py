@@ -23,7 +23,7 @@ class LSTMAutoEncoder():
         self.lstm_autoencoder.add(RepeatVector(timesteps))
         # Decoder
         self.lstm_autoencoder.add(LSTM(16, activation='relu', return_sequences=True))
-        self.lstm_autoencoder.add(Dropout(0.5))
+        #self.lstm_autoencoder.add(Dropout(0.5))
         self.lstm_autoencoder.add(LSTM(32, activation='relu', return_sequences=True))
         self.lstm_autoencoder.add(TimeDistributed(Dense(n_features)))
         lr = 0.001
