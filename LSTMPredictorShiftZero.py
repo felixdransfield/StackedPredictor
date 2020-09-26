@@ -14,7 +14,6 @@ import pandas as pd
 import numpy as np
 from pylab import rcParams
 
-from keras import optimizers, Sequential
 from keras.callbacks import ModelCheckpoint, TensorBoard
 
 from sklearn.metrics import precision_recall_curve, auc, roc_curve
@@ -22,7 +21,7 @@ from numpy.random import seed
 seed(7)
 
 rcParams['figure.figsize'] = 8, 6
-LABELS = ["Normal","Break"]
+LABELS = ["0","1"]
 
 from Utils.Data import scale, impute
 
@@ -35,6 +34,7 @@ def main():
     outcomes = configs['data']['classification_outcome']
     lookback = configs['data']['batch_size']
     timeseries_path = configs['paths']['data_path']
+    autoencoder_path = configs['paths']['autoencoder_path']
 
     ##read, impute and scale dataset
     non_smotedtime_series = pd.read_csv(timeseries_path + "TimeSeriesAggregatedUpto0.csv")
@@ -51,7 +51,7 @@ def main():
 
         epochs = 100
 
-        autoencoder = LSTMAutoEncoder(outcome, timesteps, n_features)
+        autoencoder = LSTMAutoEncoder(configs['model']['name'] + outcome, outcome, timesteps, n_features)
         autoencoder.summary()
 
         cp = ModelCheckpoint(filepath="lstm_autoencoder_classifier.h5",
@@ -63,24 +63,13 @@ def main():
                          write_graph=True,
                          write_images=True)
 
-        autoencoder.fit(X_train_y0, X_train_y0,
-                                                        epochs,
-                                                        lookback,
-                                                        X_valid_y0,
-                                                        X_valid_y0,
-                                                        2)
-
-        #print(distrs_percents)
+        autoencoder.fit(X_train_y0, X_train_y0, epochs,lookback,X_valid_y0,X_valid_y0,2)
         ####LSTM autoencoder
 
         autoencoder.plot_history()
         valid_x_predictions = autoencoder.predict(X_valid)
 
-        print(" DIMENSIONS OF X AND Y VALID: ", X_valid.shape, len(y_valid), y_valid.shape)
         mse = np.mean(np.power(flatten(X_valid) - flatten(valid_x_predictions), 2), axis=1)
-        print(" Y VALID: ", y_valid)
-        print(" SHAPE OF Y VALID: ", y_valid.shape)
-        print("length of MSE: ", len(mse), " LENGTH OF Y VALID", len(y_valid.tolist()))
         error_df = pd.DataFrame({'Reconstruction_error' : mse,
                                  'True_class' : y_valid.tolist()})
 
@@ -93,12 +82,10 @@ def main():
         # print('Best Threshold=%f, G-Mean=%.3f' % (thresholds[ix], fscore[ix]))
         pred_y = (error_df.Reconstruction_error > best_threshold).astype('int32')
 
+        perf_df = pd.DataFrame()
         perf_dict = performance_metrics(error_df.True_class, pred_y, error_df.Reconstruction_error )
-        perf_df = pd.DataFrame.from_dict(perf_dict, orient='index')
-        perf_df.to_csv("performancemetrics"+outcome+".csv", index=False)
-
-
-        print(" DIMENSIONS OF X AND Y TEST: ", X_test.shape, len(y_test), y_test)
+        perf_df = perf_df.append(perf_dict, ignore_index=True)
+        perf_df.to_csv(autoencoder_path+"performancemetrics"+outcome+".csv", index=False)
 
         test_x_predictions = autoencoder.predict(X_test)
         mse = np.mean(np.power(flatten(X_test) - flatten(test_x_predictions), 2), axis=1)
@@ -113,13 +100,13 @@ def main():
 
         for name, group in groups :
             ax.plot(group.index, group.Reconstruction_error, marker='o', ms=3.5, linestyle='',
-                    label="Break" if name == 1 else "Normal")
+                    label="1" if name == 1 else "0")
         ax.hlines(threshold_rt[ix], ax.get_xlim()[0], ax.get_xlim()[1], colors="r", zorder=100, label='Threshold')
         ax.legend()
         plt.title("Reconstruction error for different classes")
         plt.ylabel("Reconstruction error")
         plt.xlabel("Data point index")
-        plt.savefig(outcome+"Reconstructionerror.pdf", bbox_inches='tight')
+        plt.savefig(autoencoder_path+outcome+"Reconstructionerror.pdf", bbox_inches='tight')
 
 
         false_pos_rate, true_pos_rate, thresholds = roc_curve(error_df.True_class, error_df.Reconstruction_error)
@@ -137,14 +124,14 @@ def main():
         plt.title('Receiver operating characteristic curve (ROC)')
         plt.ylabel('True Positive Rate')
         plt.xlabel('False Positive Rate')
-        plt.savefig(outcome+"roc.pdf", bbox_inches='tight')
+        plt.savefig(autoencoder_path+outcome+"roc.pdf", bbox_inches='tight')
 
         pr_auc =  auc(recall_rt, precision_rt)
 
         plt.figure(figsize=(10, 10))
 
         plt.plot(recall_rt, precision_rt, linewidth=5, label='PR-AUC = %0.3f' % pr_auc)
-        plt.plot([0, 1], [0, 1], linewidth=5)
+        plt.plot([0, 1], [1, 0], linewidth=5)
 
 
         plt.xlim([-0.01, 1])
@@ -153,6 +140,6 @@ def main():
         plt.title('Precision Recall Curive')
         plt.ylabel('Precision')
         plt.xlabel('Recall')
-        plt.savefig(outcome+"precision_recall_auc.pdf", bbox_inches='tight')
+        plt.savefig(autoencoder_path+outcome+"precision_recall_auc.pdf", bbox_inches='tight')
 if __name__ == '__main__':
     main()

@@ -185,10 +185,8 @@ def curve_shift ( df, grouping, outcome, shift_by ) :
             patientFrame.iloc[0:shift_by] = 0
             df.loc[df[grouping]==patient_id, outcome] = [x for x in patientFrame.values]
 
-    print(" IN CURVE SHIFT, COLUMNS: ", df.columns)
     df = df.drop(grouping, axis=1)
     df = df.drop(outcome, axis=1)
-    print(" IN CURVE SHIFT, COLUMNS: ", df.columns)
 
     return df
 

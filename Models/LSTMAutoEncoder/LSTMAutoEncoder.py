@@ -13,8 +13,8 @@ from keras.layers import Dense, LSTM, RepeatVector, TimeDistributed
 
 
 class LSTMAutoEncoder():
-    def __init__(self, outcome, timesteps, n_features):
-        self.lstm_autoencoder = Sequential()
+    def __init__(self, name, outcome, timesteps, n_features):
+        self.lstm_autoencoder = Sequential(name = name)
         # Encoder
         self.lstm_autoencoder.add(LSTM(32, activation='relu', input_shape=(timesteps, n_features), return_sequences=True))
         self.lstm_autoencoder.add(LSTM(16, activation='relu', return_sequences=False))
@@ -57,7 +57,10 @@ class LSTMAutoEncoder():
         plt.title('Model loss')
         plt.ylabel('Loss')
         plt.xlabel('Epoch')
-        plt.savefig(self.outcome+"LossOverEpochs.pdf", bbox_inches='tight')
+        configs = json.load(open('Configuration.json', 'r'))
+        autoencoder_path = configs['paths']['autoencoder_path']
+
+        plt.savefig(autoencoder_path+self.outcome+self.outcome+"LossOverEpochs.pdf", bbox_inches='tight')
 
         plt.figure(figsize=(10, 10))
 
