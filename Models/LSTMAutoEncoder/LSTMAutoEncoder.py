@@ -1,7 +1,14 @@
 
 import os
 import datetime as dt
+import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+
+
+from sklearn.metrics import precision_recall_curve
+from Models.Metrics import performance_metrics
+from sklearn.metrics import auc, roc_curve
 
 import json
 
@@ -33,15 +40,16 @@ class LSTMAutoEncoder():
         self.outcome = outcome
         self.history = None
 
+        configs = json.load(open('Configuration.json', 'r'))
+        self.output_path = configs['paths']['autoencoder_path']
+
+
     def summary( self ):
         self.lstm_autoencoder.summary()
 
 
 
     def fit(self, trainx, trainy,e, b,val_x, val_y,v):
-        configs = json.load(open('Configuration.json', 'r'))
-
-        configs["paths"]["autoencoder_path"]
         name =  os.path.join('%s-e%s.h5' % (dt.datetime.now().strftime('%d%m%Y-%H%M%S'), str(e)))
         history = self.lstm_autoencoder.fit(trainx, trainy,epochs = e, batch_size = b,
                           validation_data = (val_x,val_y), verbose = v).history
@@ -57,10 +65,7 @@ class LSTMAutoEncoder():
         plt.title('Model loss')
         plt.ylabel('Loss')
         plt.xlabel('Epoch')
-        configs = json.load(open('Configuration.json', 'r'))
-        autoencoder_path = configs['paths']['autoencoder_path']
-
-        plt.savefig(autoencoder_path+self.outcome+self.outcome+"LossOverEpochs.pdf", bbox_inches='tight')
+        plt.savefig(self.output_path +self.outcome+self.outcome+"LossOverEpochs.pdf", bbox_inches='tight')
 
         plt.figure(figsize=(10, 10))
 
@@ -68,8 +73,69 @@ class LSTMAutoEncoder():
         predictions = self.lstm_autoencoder.predict(xval)
         return predictions
 
+    def predict_binary( self, true_class, reconstruction_error):
+        precision_rt, recall_rt, threshold_rt = precision_recall_curve(true_class,
+                                                                       reconstruction_error)
+        fscore = (2 * precision_rt * recall_rt) / (precision_rt + recall_rt)
+        ix = np.argmax(fscore)
+        best_threshold = threshold_rt[ix]
+        # print('Best Threshold=%f, G-Mean=%.3f' % (thresholds[ix], fscore[ix]))
+        pred_y = (reconstruction_error > best_threshold).astype('int32')
+        return pred_y, best_threshold, precision_rt, recall_rt
 
 
+    def output_performance(self, true_class, reconstruction_error,pred_y):
+
+        perf_df = pd.DataFrame()
+        perf_dict = performance_metrics(true_class, pred_y, reconstruction_error )
+        perf_df = perf_df.append(perf_dict, ignore_index=True)
+        perf_df.to_csv(self.output_path +"performancemetrics"+self.outcome+".csv", index=False)
+
+    def plot_reconstruction_error(self, error_df, best_threshold):
+        plt.figure(figsize=(10, 10))
+
+        groups = error_df.groupby('True_class')
+        fig, ax = plt.subplots()
+
+        for name, group in groups :
+            ax.plot(group.index, group.Reconstruction_error, marker='o', ms=3.5, linestyle='',
+                label="1" if name == 1 else "0")
+        ax.hlines(best_threshold, ax.get_xlim()[0], ax.get_xlim()[1], colors="r", zorder=100, label='Threshold')
+        ax.legend()
+        plt.title("Reconstruction error for different classes")
+        plt.ylabel("Reconstruction error")
+        plt.xlabel("Data point index")
+        plt.savefig(self.output_path  + self.outcome + "Reconstructionerror.pdf", bbox_inches='tight')
 
 
+    def plot_roc(self, error_df):
+        false_pos_rate, true_pos_rate, thresholds = roc_curve(error_df.True_class, error_df.Reconstruction_error)
+        roc_auc = auc(false_pos_rate, true_pos_rate, )
 
+        plt.figure(figsize=(10, 10))
+
+        plt.plot(false_pos_rate, true_pos_rate, linewidth=5, label='AUC = %0.3f' % roc_auc)
+        plt.plot([0, 1], [0, 1], linewidth=5)
+
+        plt.xlim([-0.01, 1])
+        plt.ylim([0, 1.01])
+        plt.legend(loc='lower right')
+        plt.title('Receiver operating characteristic curve (ROC)')
+        plt.ylabel('True Positive Rate')
+        plt.xlabel('False Positive Rate')
+        plt.savefig(self.output_path + self.outcome + "roc.pdf", bbox_inches='tight')
+
+    def plot_pr( self, precision, recall ):
+
+        pr_auc =  auc(recall, precision)
+        plt.figure(figsize=(10, 10))
+        plt.plot(recall, precision, linewidth=5, label='PR-AUC = %0.3f' % pr_auc)
+        plt.plot([0, 1], [1, 0], linewidth=5)
+
+        plt.xlim([-0.01, 1])
+        plt.ylim([0, 1.01])
+        plt.legend(loc='lower right')
+        plt.title('Precision Recall Curive')
+        plt.ylabel('Precision')
+        plt.xlabel('Recall')
+        plt.savefig(self.output_path+self.outcome+"precision_recall_auc.pdf", bbox_inches='tight')

@@ -87,7 +87,7 @@ def process_data(dynamic_series, full_series, outcome, grouping,grouping_col,  l
 
 
     return X_train_y0, X_valid_y0, X_valid, y_val1, X_test, y_test1, \
-           timesteps, n_features
+           timesteps, n_features, xgboost_training_indices, xgboost_testing_indicies
 
 def stratified_group_k_fold ( X, y, groups, k, seed=None) :
     labels_num = np.max(y) + 1

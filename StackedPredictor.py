@@ -1,114 +1,78 @@
 import os
 import json
-import pandas as pd
-from sklearn.model_selection import train_test_split
 
-from Models.XGBoost.XGBoost import XGBoostClassifier
+from Models.LSTMAutoEncoder.LSTMAutoEncoder import LSTMAutoEncoder
+from Models.LSTMAutoEncoder.Utils import process_data, flatten
 from Models.MetaClassifier.DecisionMaker import DecisionMaker
-from Models.Utils import generate_slopes, get_distribution_percentages
+from Models.XGBoost.XGBoost import XGBoostClassifier
 
+
+import pandas as pd
+import numpy as np
+from pylab import rcParams
+
+from keras.callbacks import ModelCheckpoint, TensorBoard
+
+from sklearn.metrics import auc, roc_curve
+
+from numpy.random import seed
+seed(7)
+
+rcParams['figure.figsize'] = 8, 6
+LABELS = ["0","1"]
+
+from Utils.Data import scale, impute
 
 def main():
     configs = json.load(open('Configuration.json', 'r'))
-
+    epochs = configs['training']['epochs']
     grouping = configs['data']['grouping']
+    dynamic_features = configs['data']['dynamic_columns']
     static_features = configs['data']['static_columns']
 
-    outcomes = (configs['data']['classification_outcome'])
+    outcomes = configs['data']['classification_outcome']
+    lookback = configs['data']['batch_size']
     timeseries_path = configs['paths']['data_path']
 
+    ##read, impute and scale dataset
+    non_smotedtime_series = pd.read_csv(timeseries_path + "TimeSeriesAggregatedUpto0.csv")
+    non_smotedtime_series[dynamic_features] = impute(non_smotedtime_series, dynamic_features)
+    normalized_timeseries = scale(non_smotedtime_series, dynamic_features)
+    normalized_timeseries.insert(0, grouping, non_smotedtime_series[grouping])
+
+    ##start working per outcome
     for outcome in outcomes:
         decision_maker = DecisionMaker()
 
-        time_series_nosmote = pd.read_csv(timeseries_path + "NonSMOTEDTimeSeries/"+outcome+"FlatTimeSeries1Day.csv")
-        time_series = pd.read_csv(timeseries_path + "SMOTEDTimeSeries/" + outcome + "FlatTimeSeries1Day.csv")
+        X_train_y0, X_valid_y0, X_valid, y_valid, X_test, y_test, timesteps, \
+        n_features, xgb_training_indices, xgb_testing_indices = \
+            process_data(normalized_timeseries, non_smotedtime_series, outcome, grouping,
+                         non_smotedtime_series[grouping], lookback)
 
-        X_cols = (time_series.columns).tolist()
-        X_cols.remove(outcome)
-        X_train, X_valid, y_train, y_valid = train_test_split(time_series[X_cols], time_series[outcome],
-                                                            test_size = 0.33,
-                                                            stratify = time_series[outcome],
-                                                            random_state = 42)
+        ####AUTOENCODER
+        autoencoder = LSTMAutoEncoder(configs['model']['name'] + outcome, outcome, timesteps, n_features)
+        autoencoder.summary()
 
-        test_ids = set([x.partition('.')[0] for x in X_valid[grouping]])
+        autoencoder.fit(X_train_y0, X_train_y0, epochs,lookback,X_valid_y0,X_valid_y0,2)
+        autoencoder.plot_history()
+        test_x_predictions = autoencoder.predict(X_test)
+        mse = np.mean(np.power(flatten(X_test) - flatten(test_x_predictions), 2), axis=1)
 
-        #print(test_ids.intersection(time_series_nosmote[grouping] ))
-        X_test1 = time_series_nosmote.loc[time_series_nosmote[grouping].isin(test_ids)]
-        distrs_percents = [get_distribution_percentages((time_series_nosmote[outcome]).astype(int))]
-        print(distrs_percents)
-        #print(" TEXT X SIZE: ", X_test1.shape)
+        test_error_df = pd.DataFrame({'Reconstruction_error' : mse,
+                                 'True_class' : y_test.tolist()})
 
-        #####feature selector
-        temporal_features = set(X_train.columns) - set(static_features)
+        pred_y, best_threshold, precision_rt, recall_rt= \
+            autoencoder.predict_binary(test_error_df.True_class, test_error_df.Reconstruction_error)
 
-        feature_selector = XGBoostClassifier(X_train[temporal_features], y_train,outcome, grouping)
-        fs_y, fs_ths, fs_id, fs_fi = feature_selector.run_xgb("temporal")
+        autoencoder.output_performance(test_error_df.True_class, test_error_df.Reconstruction_error,pred_y)
+        autoencoder.plot_reconstruction_error(test_error_df, best_threshold)
+        autoencoder.plot_roc(test_error_df)
+        autoencoder.plot_pr(precision_rt, recall_rt)
 
-        #temporal_classifier.predict( X_test1[temporal_features], X_test1[outcome])
+        #####XGBoost
+        xgboost_training = non_smotedtime_series.iloc[xgb_training_indices]
+        xgboost_testing = non_smotedtime_series.iloc[xgb_testing_indices]
 
-        feature_selector.predict( X_valid[temporal_features], y_valid)
-
-        decision_maker.add_classifier(outcome+"Tmp", fs_y, fs_ths, fs_id, fs_fi)
-
-        featuredf = pd.DataFrame()
-
-        temporal_features.remove(grouping)
-        featuredf['features'] = list(temporal_features)
-        featuredf['imp'] = fs_fi
-        featuredf = featuredf[featuredf['imp']> 0]
-        ######temporal classifier
-
-        #temporal_features = set(X_train.columns) - set(static_features)
-
-        temporal_features = featuredf['features'].tolist()
-        temporal_features.append(grouping)
-        temporal_classifier = XGBoostClassifier(X_train[temporal_features], y_train,outcome, grouping)
-        tm_y, tm_ths, tm_id, tm_fi = temporal_classifier.run_xgb("temporal")
-
-        #temporal_classifier.predict( X_test1[temporal_features], X_test1[outcome])
-
-        temporal_classifier.predict( X_valid[temporal_features], y_valid)
-
-        decision_maker.add_classifier(outcome+"Tmp", tm_y, tm_ths, tm_id, tm_fi)
-
-        featuredf = pd.DataFrame()
-
-        temporal_features.remove(grouping)
-        featuredf['features'] = list(temporal_features)
-        featuredf['imp'] = tm_fi
-        featuredf = featuredf[featuredf['imp']> 0]
-
-        ########################################
-        #baseline and static
-        baseline_features = featuredf['features']
-
-        baseline_features= set([x.partition('_')[0] for x in list(baseline_features)])
-
-        baseline_features = [x+"_0" for x in list(baseline_features)]
-
-        baseline_features.insert(0,grouping)
-        baseline_static_features = baseline_features + static_features
-
-
-        slopes_df = generate_slopes ( X_train, static_features, grouping)
-        slopes_static_baseline_df = pd.concat([slopes_df, X_train[baseline_static_features]], axis=1,join='inner')
-
-        slopes_static_baseline_df = slopes_static_baseline_df.loc[:, ~slopes_static_baseline_df.columns.duplicated()]
-
-        slopes_df_test = generate_slopes ( X_valid, static_features, grouping)
-        slopes_static_baseline_test_df = pd.concat([slopes_df_test, X_valid[baseline_static_features]], axis=1,join='inner')
-        slopes_static_baseline_test_df = slopes_static_baseline_test_df.loc[:, ~slopes_static_baseline_test_df.columns.duplicated()]
-
-
-        slopes_static_baseline_classifier = XGBoostClassifier(slopes_static_baseline_df, y_train, outcome, grouping)
-
-        bs_y, bs_ths, bs_id, bs_fi = slopes_static_baseline_classifier.run_xgb("baseline_static_slope")
-        slopes_static_baseline_classifier.predict( slopes_static_baseline_test_df, y_valid)
-
-        decision_maker.add_classifier(outcome+"bss", bs_y, bs_ths, bs_id, bs_fi)
-
-        ####LSTM autoencoder
-        smoted_stacked_series = pd.read_csv(timeseries_path+"SMOTEDTimeSeries/"+outcome+"StackedTimeSeries1Day.csv")
 
 if __name__ == '__main__':
     main()

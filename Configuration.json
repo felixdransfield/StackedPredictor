@@ -47,7 +47,8 @@
 		"regression_outcome": ["PO2/FIO2"]
 	},
 	"training": {
-		"folds": 10
+		"folds": 10,
+		"epochs": 100
 	},
 	"model": {
 		"name": "lstm-binary-classifier",
