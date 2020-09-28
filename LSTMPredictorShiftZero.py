@@ -12,9 +12,12 @@ from pylab import rcParams
 
 from keras.callbacks import ModelCheckpoint, TensorBoard
 
-from sklearn.metrics import auc, roc_curve
+from os import makedirs
 
 from numpy.random import seed
+
+from Models.Utils import get_train_test_split
+
 seed(7)
 
 rcParams['figure.figsize'] = 8, 6
@@ -31,6 +34,7 @@ def main():
     outcomes = configs['data']['classification_outcome']
     lookback = configs['data']['batch_size']
     timeseries_path = configs['paths']['data_path']
+    saved_models_path = configs['paths']['saved_models_path']
 
     ##read, impute and scale dataset
     non_smotedtime_series = pd.read_csv(timeseries_path + "TimeSeriesAggregatedUpto0.csv")
@@ -41,25 +45,23 @@ def main():
     ##start working per outcome
     for outcome in outcomes:
         decision_maker = DecisionMaker()
+        fold_ind, train_ind, test_ind = get_train_test_split(non_smotedtime_series[outcome].astype(int),
+                                                             non_smotedtime_series[grouping])
 
         X_train_y0, X_valid_y0, X_valid, y_valid, X_test, y_test, timesteps,\
         n_features = \
-            process_data(normalized_timeseries, non_smotedtime_series, outcome, grouping,
-                         non_smotedtime_series[grouping], lookback)
+            process_data(normalized_timeseries, non_smotedtime_series, outcome, grouping, lookback,
+                         train_ind, test_ind)
 
         autoencoder = LSTMAutoEncoder(configs['model']['name'] + outcome, outcome, timesteps, n_features)
         autoencoder.summary()
 
-        cp = ModelCheckpoint(filepath="lstm_autoencoder_classifier.h5",
-                             save_best_only=True,
-                             verbose=0)
-
-        tb = TensorBoard(log_dir='./logs',
-                         histogram_freq=0,
-                         write_graph=True,
-                         write_images=True)
-
         autoencoder.fit(X_train_y0, X_train_y0, epochs,lookback,X_valid_y0,X_valid_y0,2)
+
+        ###save model
+        filename = saved_models_path+ configs['model']['name'] + outcome+ '.h5'
+        autoencoder.save_model(filename)
+
         ####LSTM autoencoder
         autoencoder.plot_history()
         test_x_predictions = autoencoder.predict(X_test)

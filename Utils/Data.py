@@ -150,10 +150,9 @@ def scale(df, scale_columns):
 
 def flatten(time_series, dynamic_features, grouping, static_features, outcome_column):
     #First, create the structure of a flat DF
-    newdf = time_series
+    newdf = time_series.copy()
     newdf.insert(0, grouping+'2', newdf[grouping])
     aggregated_df = newdf.groupby(grouping+'2').aggregate('first')
-
 
     timesteps = len(newdf)/len(aggregated_df)
     flat_df = pd.DataFrame()

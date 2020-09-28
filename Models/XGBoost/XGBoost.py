@@ -3,12 +3,15 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 import xgboost as xgb
-from sklearn.metrics import auc, precision_recall_curve, f1_score
+from sklearn.metrics import auc, precision_recall_curve, f1_score, confusion_matrix
+from sklearn.model_selection import RepeatedStratifiedKFold, cross_val_score, cross_validate
+from sklearn.metrics import make_scorer
+
 from Models.Utils import stratified_group_k_fold, get_distribution, get_distribution_scalars
 from Models.Metrics import performance_metrics
+from Models.Utils import smote
 
 class XGBoostClassifier():
-
     def __init__(self, X, y,outcome, grouping):
 
         self.predicted_probabilities = pd.DataFrame()
@@ -24,165 +27,73 @@ class XGBoostClassifier():
                                  learning_rate=0.007,
                                  n_estimators=100,
                                  gamma=0,
-                                 max_depth=4,
                                  min_child_weight=2,
                                  subsample=1,
                                  eval_metric='error')
 
 
-    def run_xgb(self, label):
+    def fit(self, label, groups):
+        def tn ( y_true, y_pred ) : return confusion_matrix(y_true, y_pred)[0, 0]
+        def fp ( y_true, y_pred ) : return confusion_matrix(y_true, y_pred)[0, 1]
+        def fn ( y_true, y_pred ) : return confusion_matrix(y_true, y_pred)[1, 0]
+        def tp ( y_true, y_pred ) : return confusion_matrix(y_true, y_pred)[1, 1]
+
+        scoring = {'tp' : make_scorer(tp), 'tn' : make_scorer(tn), 'fp' : make_scorer(fp), 'fn': make_scorer(fn)}
 
         x_columns = ((self.X.columns).tolist())
-        x_columns.remove(self.grouping)
-
         X = self.X[x_columns]
         X.reset_index()
-        groups = np.array(self.X[self.grouping])
+        y = self.y
+        y.reset_index()
 
-        distrs = [get_distribution(self.y)]
-        index = ['Entire set']
+        #X, y  = smote(X, y)
 
-        prs = []
-        aucs = []
-        mean_recall = np.linspace(0, 1, 100)
-        threshold_indices = []
-        i = 0
+        print(label+" Y distribution after smoting ", get_distribution(y))
 
-        plt.figure(figsize=(10, 10))
+        cv = RepeatedStratifiedKFold(n_splits=10, n_repeats=3, random_state=1)
+        scores = cross_validate(self.model.fit(X,y), X, y, scoring=['f1_macro', 'precision_macro',
+                                                                    'recall_macro'], cv=cv, n_jobs=-4)
+        #print('Mean F1 Macro: %.3f' % np.mean(scores['test_tp']))
+        print(label+'Mean F1 Macro:', np.mean(scores['test_f1_macro']), 'Mean Precision Macro: ',
+              np.mean(scores['test_precision_macro']), 'mean Recall Macro' ,
+              np.mean(scores['test_recall_macro']))
 
-        stats_df = pd.DataFrame()
-
-        false_X = []
-        false_Y = []
-        false_IDs = []
-
-        predicted_Y = []
-        predicted_thredholds = []
-        predicted_IDs = []
-
-
-        for fold_ind, (training_ind, testing_ind) in enumerate(stratified_group_k_fold(X, self.y, groups, k=10)) : #CROSS-VALIDATION
-            #Train
-
-                training_groups = groups[training_ind], groups[testing_ind]
-                y_grab = self.y
-                y_grab.reset_index()
-                training_y, testing_y = y_grab.iloc[training_ind], y_grab.iloc[testing_ind]
-                training_X, testing_X = X.iloc[training_ind], X.iloc[testing_ind]
-                self.model.fit(training_X, training_y)
-
-            #default, before looking into whether the dataset has been smoted
-                testing_ids = groups[testing_ind]
-
-                # Train, predict and Plot
-                self.model.fit(testing_X, testing_y)
-                y_pred_rt = self.model.predict_proba(testing_X)[:, 1]
-
-                precision, recall, thresholds = precision_recall_curve(testing_y, y_pred_rt)
-                fscore = (2 * precision * recall) / (precision + recall)
-                ix = np.argmax(fscore)
-                threshold_indices.append(ix)
-                threshold = thresholds[ix]
-                y_pred_binary = (y_pred_rt > thresholds[ix]).astype('int32')
-
-                #Get all predictions
-                for w in range(0, len(testing_y)):
-                    predicted_Y.append(y_pred_rt[w])
-                    predicted_IDs.append(testing_ids[w])
-                    predicted_thredholds.append(threshold)
-
-                #Get false negatives:
-                for w in range(0,len(testing_y)):
-                    if (testing_y.iloc[w] ==1 and y_pred_binary[w] == 0) or (testing_y.iloc[w] ==0 and y_pred_binary[w] ==1):
-                        false_Y.append(testing_y.iloc[w])
-                        false_X.append(testing_X.iloc[w])
-                        false_IDs.append(testing_ids[w])
-
-                prs.append(np.interp(mean_recall, precision, recall))
-                pr_auc = auc(recall, precision)
-                aucs.append(pr_auc)
-                i += 1
-
-                stats_df = stats_df.append(performance_metrics(testing_y, y_pred_binary, y_pred_rt), ignore_index=True)
-
-                # add to the distribution dataframe, for verification purposes
-                distrs.append(get_distribution(training_y))
-
-                index.append(f'training set - fold {fold_ind}')
-                distrs.append(get_distribution(testing_y))
-                index.append(f'testing set - fold {fold_ind}')
-
-        plt.plot([0, 1], [1, 0], linestyle='--', lw=3, label='Luck', alpha=.8)
-
-        mean_precision = np.mean(prs, axis=0)
-
-        mean_auc = auc(mean_recall, mean_precision)
-        plt.plot(mean_precision, mean_recall, color='navy',
-             label=r' Mean AUCPR = %0.3f' % mean_auc,
-             lw=4)
-
-        plt.scatter(recall[ix], precision[ix], marker='o', color='black', label='Best')
-
-        plt.xlim([-0.05, 1.05])
-        plt.ylim([-0.05, 1.05])
-        plt.xlabel('Recall', fontsize=20)
-        plt.ylabel('Precision', fontsize=20)
-        plt.tick_params(axis='both', which='major', labelsize=20)
-
-        stats_path = "Run/Stats/"
-        prediction_path = "Run/Prediction/"
-
-        plt.legend(prop={'size' : 10}, loc=4)
-        plt.savefig(prediction_path+"ROCXGB"+label+self.outcome+".pdf", bbox_inches='tight')
-
-        stats_df.to_csv(stats_path + label+ self.outcome  + "XGB.csv", index=False)
-
-        #f = plt.figure()
-
-        #rf_shap_values = shap.KernelExplainer(self.model.predict, testing_X)
-        #shap.summary_plot(rf_shap_values, testing_X)
-
-        #f.savefig(prediction_path+"SHAP"+self.outcome+experiment_number+".pdf", bbox_inches='tight')
-
-        return predicted_Y, predicted_thredholds, predicted_IDs, self.model.feature_importances_
+        #print(cv_results['test_tp'])
+        self.model.fit(X,y)
+        #return predicted_Y, predicted_thredholds, predicted_IDs, self.model.feature_importances_
 
 
     def predict( self, holdout_X, holdout_y):
 
         x_columns = ((holdout_X.columns).tolist())
-        x_columns.remove(self.grouping)
+        #x_columns.remove(self.grouping)
 
         holdout_X = holdout_X[x_columns]
         holdout_X.reset_index()
 
-        yhat = self.model.predict_proba(holdout_X)[:, 1]
-        precision, recall, thresholds = precision_recall_curve(holdout_y, yhat)
-        fscore = (2 * precision * recall) / (precision + recall)
+        yhat = (self.model).predict_proba(holdout_X)[:, 1]
+        precision_rt, recall_rt, thresholds = precision_recall_curve(holdout_y, yhat)
+        fscore = (2 * precision_rt * recall_rt) / (precision_rt + recall_rt)
 
         ix = np.argmax(fscore)
-
-        #print('Best Threshold=%f, G-Mean=%.3f' % (thresholds[ix], fscore[ix]))
+        best_threshold = thresholds[ix]
         y_pred_binary = (yhat > thresholds[ix]).astype('int32')
 
-        print(self.outcome, performance_metrics(holdout_y, y_pred_binary, yhat))
+        return y_pred_binary, best_threshold, precision_rt, recall_rt
 
+
+    def plot_pr( self, precision, recall ):
+        pr_auc =  auc(recall, precision)
         plt.figure(figsize=(10, 10))
+        plt.plot(recall, precision, linewidth=5, label='PR-AUC = %0.3f' % pr_auc)
+        plt.plot([0, 1], [1, 0], linewidth=5)
 
-        plt.plot([0,1], [1, 0], linestyle='--', label='No Skill')
-        plt.plot(recall, precision, marker='.', label='Logistic')
-        plt.scatter(recall[ix], recall[ix], marker='o', color='black', label='Best')
-        # axis labels
-        plt.xlabel('False Positive Rate')
-        plt.ylabel('True Positive Rate')
-        plt.legend()
+        plt.xlim([-0.01, 1])
+        plt.ylim([0, 1.01])
+        plt.legend(loc='lower right')
+        plt.title('Precision Recall Curive')
+        plt.ylabel('Precision')
+        plt.xlabel('Recall')
+        prediction_path = "Run/XGBoost/"
 
-
-
-        stats_path = "Run/Stats/"
-        prediction_path = "Run/Prediction/"
-
-        plt.legend(prop={'size' : 10}, loc=4)
-        plt.savefig(prediction_path+"HOLOUT"+self.outcome+".pdf", bbox_inches='tight')
-
-        #return y_pred_rt, y_pred_binary, threshold
-
+        plt.savefig(prediction_path+self.outcome+"precision_recall_auc.pdf", bbox_inches='tight')

@@ -5,33 +5,21 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
-from sklearn.metrics import f1_score
+from imblearn.over_sampling import SMOTE
+from imblearn.under_sampling import RandomUnderSampler
+from imblearn.pipeline import Pipeline
+
+SEED = 123 #used to help randomly select the data points
 
 
-lstm_dict={}
-lstm_dict['activation'] = ['sigmoid']
-lstm_dict['batch'] = ['all']
-lstm_dict['data'] = ['balanced', 'unchanged']
-lstm_dict['dropout'] = [0.0, 0.2, 0.4, 0.6]
-lstm_dict['layers'] = [1, 2]
-lstm_dict['masking'] = [True]
-lstm_dict['optimizer'] = ['RMSprop', 'Adagrad']
-lstm_dict['outcome'] = ['ITUAdmission7Days', 'ITUAdmission14Days', 'ITUAdmission30Days',
-                         'Mortality7Days','Mortality14Days','Mortality30Days']
-lstm_dict['units'] = [1, 4, 8, 16, 32, 64, 128]
+def get_train_test_split(outcome_col, grouping_col):
+    fold_ind, training_ind, testing_ind= stratified_group_k_fold(outcome_col,
+                                                                 grouping_col, 3, seed=SEED)
 
-lstm_running_params = {}
-lstm_running_params['monitor_checkpoint'] = ['val_matthews', 'max']
-lstm_running_params['monitor_early_stopping'] = ['val_matthews', 'max']
-lstm_running_params['early_stopping'] = True
-lstm_running_params['save_checkpoint'] = True
-lstm_running_params['seed'] = 42
-lstm_running_params['n_splits'] = 10
-lstm_running_params['n_epochs'] = 1000
-lstm_running_params['patience'] = 200
+    return fold_ind, training_ind, testing_ind
 
 
-def stratified_group_k_fold ( X, y, groups, k, seed=None) :
+def stratified_group_k_fold (y, groups, k, seed=None) :
     labels_num = np.max(y) + 1
     y_counts_per_group = defaultdict(lambda : np.zeros(labels_num))
     y_distr = Counter()
@@ -116,20 +104,17 @@ def class_weights(y):
     return class_weight
 
 
-def generate_slopes(X, static_columns, id_col):
-    all_cols = X.columns.tolist()
-    all_cols = list(set(all_cols) - set(static_columns))
-    all_cols.remove(id_col)
+def generate_slopes(X, dynamic_columns, static_columns, id_col, training_groups):
 
     slopes_df = pd.DataFrame()
-    slopes_df.insert(0, id_col, X[id_col])
+    slopes_df.insert(0, id_col, training_groups)
 
-    max_int = max(set([int(x.partition('_')[2])  for x in all_cols]))
-    baseline_cols = [x for x in all_cols if int(x.partition('_')[2]) ==0]
+    max_int = max(set([int(x.partition('_')[2])  for x in dynamic_columns]))
+    baseline_cols = [x for x in dynamic_columns if int(x.partition('_')[2]) ==0]
     baseline_cols.sort()
-    last_cols = [x for x in all_cols if int(x.partition('_')[2]) ==max_int]
+    last_cols = [x for x in dynamic_columns if int(x.partition('_')[2]) ==max_int]
     last_cols.sort()
-    col_names = [x.partition('_')[0]+'_slope' for x in all_cols if int(x.partition('_')[2]) ==max_int]
+    col_names = [x.partition('_')[0]+'_slope' for x in dynamic_columns if int(x.partition('_')[2]) ==max_int]
     col_names.sort()
 
     for i, j, k in zip(last_cols, baseline_cols, col_names):
@@ -137,17 +122,6 @@ def generate_slopes(X, static_columns, id_col):
         slopes_df[k] = new_col
 
     return slopes_df
-
-def generate_trajectory_timeseries(df, baseline_columns, static_columns, timeseries_columns, id_col, outcome_columns):
-    for i, j in zip(timeseries_columns, baseline_columns):
-        df[i] = df[i] - df[j]
-
-    new_df = df[timeseries_columns]
-    new_df.insert(0, id_col, df[id_col])
-    new_df[outcome_columns] = df[outcome_columns]
-    new_df[static_columns] = df[static_columns]
-
-    return new_df
 
 def impute(df, impute_columns):
 
@@ -164,3 +138,19 @@ def scale(df, scale_columns):
     normalized_df.columns = scale_columns
 
     return normalized_df
+
+
+#def smote(X, y):
+
+ #   oversample = SMOTE()
+  #  X, y = oversample.fit_resample(X, y)
+
+   # return X, y
+
+def smote(X, y):
+    over = SMOTE(sampling_strategy=0.9)
+    under = RandomUnderSampler(sampling_strategy=0.9)
+    steps = [('o', over), ('u', under)]
+    pipeline = Pipeline(steps=steps)
+    X, y = pipeline.fit_resample(X, y)
+    return X, y

@@ -1,29 +1,21 @@
 import numpy as np
 import random
 import pandas as pd
-from sklearn.model_selection import train_test_split, GroupShuffleSplit
 from collections import Counter, defaultdict
 
-import Models
-SEED = 123 #used to help randomly select the data points
+def process_data(dynamic_series, full_series, outcome, grouping, lookback,
+                 training_ind, testing_ind):
 
-def process_data(dynamic_series, full_series, outcome, grouping,grouping_col,  lookback):
-    # train/test and validation sets
     dynamic_series.insert(len(dynamic_series.columns), outcome, full_series[outcome])
     dynamic_series[outcome] = dynamic_series[outcome].astype(int)
 
     X_cols = (dynamic_series.columns).tolist()
-    #X_cols.remove(outcome)
-    #X_cols.remove(grouping)
 
     input_X = dynamic_series.loc[:,
               dynamic_series.columns.isin(X_cols)] # converts the df to a numpy array
     input_y = dynamic_series[outcome].values
 
     n_features = input_X[X_cols].shape[1] -2 # number of features
-
-    fold_ind, training_ind, testing_ind= stratified_group_k_fold(input_X, input_y, grouping_col, 3, seed=SEED)
-
 
     X_train = input_X.iloc[training_ind[0]]
     y_train = input_y[training_ind[0]]
@@ -43,9 +35,6 @@ def process_data(dynamic_series, full_series, outcome, grouping,grouping_col,  l
 
     X_test = input_X.iloc[testing_ind[1]]
     y_test = input_y[testing_ind[1]]
-
-    xgboost_training_indices = training_ind[0]+training_ind[1]
-    xgboost_testing_indicies = testing_ind[1]
 
     aggregated_y_test= pd.DataFrame(X_test[grouping])
     aggregated_y_test[outcome] = y_test
@@ -86,8 +75,7 @@ def process_data(dynamic_series, full_series, outcome, grouping,grouping_col,  l
     n_features = X_train_y0.shape[2]  # 59
 
 
-    return X_train_y0, X_valid_y0, X_valid, y_val1, X_test, y_test1, \
-           timesteps, n_features
+    return X_train, X_train_y0, X_valid_y0, X_valid, y_val1, X_test, y_test1, timesteps, n_features
 
 def stratified_group_k_fold ( X, y, groups, k, seed=None) :
     labels_num = np.max(y) + 1
@@ -193,7 +181,7 @@ def curve_shift ( df, grouping, outcome, shift_by ) :
     df = df.drop(outcome, axis=1)
     return df
 
-def flatten ( X ) :
+def lstm_flatten ( X ) :
     '''
     Flatten a 3D array.
 
