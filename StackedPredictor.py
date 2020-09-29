@@ -131,7 +131,7 @@ def main () :
         feature_selector.fit("temporal", training_groups)
 
         y_pred_binary, best_threshold, precision_rt, recall_rt = feature_selector.predict( X_test, y_test)
-        feature_selector.plot_pr(precision_rt, recall_rt)
+        feature_selector.plot_pr(precision_rt, recall_rt, "XGBoost Temporal")
 
         featuredf = pd.DataFrame()
 
@@ -155,6 +155,7 @@ def main () :
         slopes_static_baseline_train_df = slopes_static_baseline_train_df.loc[:, ~slopes_static_baseline_train_df.columns.duplicated()]
         slopes_static_baseline_train_groups  = slopes_static_baseline_train_df[grouping]
         slopes_static_baseline_train_df.drop(columns = [grouping], inplace=True, axis=1)
+        slopes_static_baseline_train_df['mse'] = mse_train
 
         slopes_df_test = generate_slopes ( X_test, temporal_features, static_features, grouping, testing_groups)
 
@@ -162,14 +163,18 @@ def main () :
         slopes_static_baseline_test_df = slopes_static_baseline_test_df.loc[:, ~slopes_static_baseline_test_df.columns.duplicated()]
         slopes_static_baseline_test_groups  = slopes_static_baseline_test_df[grouping]
         slopes_static_baseline_test_df.drop(columns = [grouping], inplace=True,axis=1)
+        slopes_static_baseline_test_df['mse'] = mse_test
 
-        #slopes_static_baseline_classifier = XGBoostClassifier(slopes_static_baseline_train_df,
-                                                         #     y_train, outcome, grouping)
+        print(" COLUMNS: ", slopes_static_baseline_train_df.columns)
+        slopes_static_baseline_classifier = XGBoostClassifier(slopes_static_baseline_train_df,
+                                                              y_train, outcome, grouping)
 
         #bs_y, bs_ths, bs_id, bs_fi = slopes_static_baseline_classifier.fit("baseline_static_slope",
          #                                                                      slopes_static_baseline_train_groups)
-        #slopes_static_baseline_classifier.fit("baseline_static_slope", slopes_static_baseline_train_groups)
-        #slopes_static_baseline_classifier.predict( slopes_static_baseline_test_df, y_test)
+        slopes_static_baseline_classifier.fit("baseline_static_slope", slopes_static_baseline_train_groups)
+        y_pred_binary, best_threshold, precision_rt, recall_rt = \
+            slopes_static_baseline_classifier.predict( slopes_static_baseline_test_df, y_test)
+        slopes_static_baseline_classifier.plot_pr(precision_rt, recall_rt, "XGBoost Static")
 
 
 if __name__ == '__main__' :

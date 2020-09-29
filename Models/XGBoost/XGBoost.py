@@ -82,7 +82,7 @@ class XGBoostClassifier():
         return y_pred_binary, best_threshold, precision_rt, recall_rt
 
 
-    def plot_pr( self, precision, recall ):
+    def plot_pr( self, precision, recall, label):
         pr_auc =  auc(recall, precision)
         plt.figure(figsize=(10, 10))
         plt.plot(recall, precision, linewidth=5, label='PR-AUC = %0.3f' % pr_auc)
@@ -91,9 +91,9 @@ class XGBoostClassifier():
         plt.xlim([-0.01, 1])
         plt.ylim([0, 1.01])
         plt.legend(loc='lower right')
-        plt.title('Precision Recall Curive')
+        plt.title(self.outcome+' Precision Recall Curive-'+label)
         plt.ylabel('Precision')
         plt.xlabel('Recall')
         prediction_path = "Run/XGBoost/"
 
-        plt.savefig(prediction_path+self.outcome+"precision_recall_auc.pdf", bbox_inches='tight')
+        plt.savefig(prediction_path+self.outcome+label+"precision_recall_auc.pdf", bbox_inches='tight')
