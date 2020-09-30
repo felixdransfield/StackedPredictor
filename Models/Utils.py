@@ -8,6 +8,7 @@ from sklearn.impute import IterativeImputer
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 from imblearn.pipeline import Pipeline
+from Utils.Dictionary import aggregation
 
 SEED = 123 #used to help randomly select the data points
 
@@ -122,6 +123,39 @@ def generate_slopes(X, dynamic_columns, static_columns, id_col, training_groups)
         slopes_df[k] = new_col
 
     return slopes_df
+
+
+
+def generate_aggregates(X, dynamic_columns, id_col, training_groups):
+
+    agg_df = pd.DataFrame()
+    agg_df.insert(0, id_col, training_groups)
+
+    abstract_cols = [x for x in dynamic_columns if int(x.partition('_')[2]) ==0]
+    abstract_cols = [x.partition('_')[0] for x in abstract_cols]
+
+    for col in abstract_cols:
+        col_aggregate = aggregation[col]
+        print(col, ":", col_aggregate)
+        batch_columns = [x for x in X.columns.tolist() if x.partition('_')[1] == col]
+
+        batch = X[batch_columns]
+        label = ""
+        if col_aggregate =='min':
+            new_col = X.min(axis=1)
+            label="_min"
+        elif col_aggregate =='max':
+            new_col = X.max(axis=1)
+            label="_max"
+        else:
+            new_col = X.mean(axis=1)
+            label="_mean"
+        agg_df[col+label] = new_col
+
+        return agg_df
+
+def apply_func(df, col):
+    return df.apply(aggregation[col], axis=1)
 
 def impute(df, impute_columns):
 

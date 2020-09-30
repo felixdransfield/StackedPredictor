@@ -73,8 +73,6 @@ class LSTMAutoEncoder():
         plt.xlabel('Epoch')
         plt.savefig(self.output_path +self.outcome+self.outcome+"LossOverEpochs.pdf", bbox_inches='tight')
 
-        plt.figure(figsize=(10, 10))
-
     def predict( self , xval):
         predictions = self.lstm_autoencoder.predict(xval)
         return predictions

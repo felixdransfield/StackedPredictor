@@ -9,7 +9,6 @@ from sklearn.metrics import make_scorer
 
 from Models.Utils import stratified_group_k_fold, get_distribution, get_distribution_scalars
 from Models.Metrics import performance_metrics
-from Models.Utils import smote
 
 class XGBoostClassifier():
     def __init__(self, X, y,outcome, grouping):
@@ -33,13 +32,6 @@ class XGBoostClassifier():
 
 
     def fit(self, label, groups):
-        def tn ( y_true, y_pred ) : return confusion_matrix(y_true, y_pred)[0, 0]
-        def fp ( y_true, y_pred ) : return confusion_matrix(y_true, y_pred)[0, 1]
-        def fn ( y_true, y_pred ) : return confusion_matrix(y_true, y_pred)[1, 0]
-        def tp ( y_true, y_pred ) : return confusion_matrix(y_true, y_pred)[1, 1]
-
-        scoring = {'tp' : make_scorer(tp), 'tn' : make_scorer(tn), 'fp' : make_scorer(fp), 'fn': make_scorer(fn)}
-
         x_columns = ((self.X.columns).tolist())
         X = self.X[x_columns]
         X.reset_index()
@@ -53,6 +45,8 @@ class XGBoostClassifier():
         cv = RepeatedStratifiedKFold(n_splits=10, n_repeats=3, random_state=1)
         scores = cross_validate(self.model.fit(X,y), X, y, scoring=['f1_macro', 'precision_macro',
                                                                     'recall_macro'], cv=cv, n_jobs=-4)
+
+
         #print('Mean F1 Macro: %.3f' % np.mean(scores['test_tp']))
         print(label+'Mean F1 Macro:', np.mean(scores['test_f1_macro']), 'Mean Precision Macro: ',
               np.mean(scores['test_precision_macro']), 'mean Recall Macro' ,

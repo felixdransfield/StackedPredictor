@@ -2,35 +2,35 @@ import os
 import json
 
 from Models.LSTMAutoEncoder.LSTMAutoEncoder import LSTMAutoEncoder
-from Models.LSTMAutoEncoder.Utils import process_data, flatten
-from Models.RiskScore.VisualisePopulation import DecisionMaker
-import matplotlib.pyplot as plt
+from Models.LSTMAutoEncoder.Utils import process_data, lstm_flatten
+from Models.RiskScore.VisualisePopulation import Visualiser
+from Utils.Data import flatten
 
 import pandas as pd
-import numpy as np
 from pylab import rcParams
+import numpy as np
 
 from keras.callbacks import ModelCheckpoint, TensorBoard
 
-from sklearn.metrics import auc, roc_curve
-
 from numpy.random import seed
+
+from Models.Utils import get_train_test_split, generate_slopes, generate_aggregates
+from Models.XGBoost.XGBoost import XGBoostClassifier
+import os.path
+
 seed(7)
 
 rcParams['figure.figsize'] = 8, 6
-LABELS = ["0","1"]
+LABELS = ["0", "1"]
 
 from Utils.Data import scale, impute
 
-def main():
-    configs = json.load(open('Configuration.json', 'r'))
 
-    epochs = configs['training']['epochs']
+def main () :
+    configs = json.load(open('Configuration.json', 'r'))
     grouping = configs['data']['grouping']
     dynamic_features = configs['data']['dynamic_columns']
-
-    outcomes = configs['data']['classification_outcome']
-    lookback = configs['data']['batch_size']
+    targets = configs['data']['classification_target']
     timeseries_path = configs['paths']['data_path']
 
     ##read, impute and scale dataset
@@ -39,13 +39,10 @@ def main():
     normalized_timeseries = scale(non_smotedtime_series, dynamic_features)
     normalized_timeseries.insert(0, grouping, non_smotedtime_series[grouping])
 
-    ##start working per outcome
-    for outcome in outcomes:
-        decision_maker = DecisionMaker()
-
-        X_train_y0, y_train1, X_valid_y0, X_valid_y1, X_valid, y_val1, X_test, y_test1, timesteps, n_features=\
-            process_data(normalized_timeseries, non_smotedtime_series, outcome, grouping, non_smotedtime_series[grouping], lookback)
+    risk_score_visualiser = Visualiser(normalized_timeseries, non_smotedtime_series)
+    for target in targets:
+            risk_score_visualiser.plot_risk_scores(target)
 
 
-if __name__ == '__main__':
+if __name__ == '__main__' :
     main()

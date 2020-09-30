@@ -3,7 +3,7 @@ import json
 
 from Models.LSTMAutoEncoder.LSTMAutoEncoder import LSTMAutoEncoder
 from Models.LSTMAutoEncoder.Utils import process_data, lstm_flatten
-from Models.RiskScore.VisualisePopulation import Visualiser
+from Models.RiskScore.VisualisePopulation import DecisionMaker
 from Utils.Data import flatten
 
 import pandas as pd
@@ -44,10 +44,9 @@ def main () :
     normalized_timeseries = scale(non_smotedtime_series, dynamic_features)
     normalized_timeseries.insert(0, grouping, non_smotedtime_series[grouping])
 
-    autoencoders = pd.Series()
     ##start working per outcome
     for outcome in outcomes :
-
+        decision_maker = DecisionMaker()
         fold_ind, train_ind, test_ind = get_train_test_split(non_smotedtime_series[outcome].astype(int),
                                                              non_smotedtime_series[grouping])
 
@@ -74,7 +73,6 @@ def main () :
             filename = saved_models_path+ configs['model']['name'] + outcome+ '.h5'
             autoencoder.save_model(filename)
 
-        autoencoders.append(filename)
         ####Predicting using the fitted model (loaded or trained)
 
         train_x_predictions = autoencoder.predict(X_train)
@@ -153,37 +151,34 @@ def main () :
 
 
         slopes_df = generate_slopes ( X_train, temporal_features, static_features,grouping, training_groups)
+
         aggregate_df = generate_aggregates ( X_train, temporal_features, grouping, training_groups )
 
-        slopes_static_aggregate_train_df = pd.concat([slopes_df, X_train_static], axis=1,join='inner')
-        slopes_static_aggregate_train_df = pd.concat([slopes_static_aggregate_train_df, aggregate_df], axis=1,join='inner')
+        slopes_static_baseline_train_df = pd.concat([slopes_df, X_train_static], axis=1,join='inner')
 
-        slopes_static_aggregate_train_df = slopes_static_aggregate_train_df.loc[:, ~slopes_static_aggregate_train_df.columns.duplicated()]
-        slopes_static_aggregate_train_groups  = slopes_static_aggregate_train_df[grouping]
-        slopes_static_aggregate_train_df.drop(columns = [grouping], inplace=True, axis=1)
-        slopes_static_aggregate_train_df['mse'] = mse_train
+        slopes_static_baseline_train_df = slopes_static_baseline_train_df.loc[:, ~slopes_static_baseline_train_df.columns.duplicated()]
+        slopes_static_baseline_train_groups  = slopes_static_baseline_train_df[grouping]
+        slopes_static_baseline_train_df.drop(columns = [grouping], inplace=True, axis=1)
+        slopes_static_baseline_train_df['mse'] = mse_train
 
         slopes_df_test = generate_slopes ( X_test, temporal_features, static_features, grouping, testing_groups)
-        aggregate_df_test = generate_aggregates ( X_test, temporal_features, grouping, testing_groups )
 
-        slopes_static_aggregate_test_df = pd.concat([slopes_df_test, X_test_static], axis=1,join='inner')
-        slopes_static_aggregate_test_df = pd.concat([slopes_static_aggregate_test_df, aggregate_df_test], axis=1,join='inner')
-
-        slopes_static_aggregate_test_df = slopes_static_aggregate_test_df.loc[:, ~slopes_static_aggregate_test_df.columns.duplicated()]
-        slopes_static_baseline_test_groups  = slopes_static_aggregate_test_df[grouping]
-        slopes_static_aggregate_test_df.drop(columns = [grouping], inplace=True,axis=1)
-        slopes_static_aggregate_test_df['mse'] = mse_test
+        slopes_static_baseline_test_df = pd.concat([slopes_df_test, X_test_static], axis=1,join='inner')
+        slopes_static_baseline_test_df = slopes_static_baseline_test_df.loc[:, ~slopes_static_baseline_test_df.columns.duplicated()]
+        slopes_static_baseline_test_groups  = slopes_static_baseline_test_df[grouping]
+        slopes_static_baseline_test_df.drop(columns = [grouping], inplace=True,axis=1)
+        slopes_static_baseline_test_df['mse'] = mse_test
 
 
-        slopes_static_baseline_classifier = XGBoostClassifier(slopes_static_aggregate_train_df,
+        slopes_static_baseline_classifier = XGBoostClassifier(slopes_static_baseline_train_df,
                                                               y_train, outcome, grouping)
 
-        slopes_static_baseline_classifier.fit("aggregate_slopes_static_slope", slopes_static_aggregate_train_groups)
+        #bs_y, bs_ths, bs_id, bs_fi = slopes_static_baseline_classifier.fit("baseline_static_slope",
+         #                                                                      slopes_static_baseline_train_groups)
+        slopes_static_baseline_classifier.fit("baseline_static_slope", slopes_static_baseline_train_groups)
         y_pred_binary, best_threshold, precision_rt, recall_rt = \
-            slopes_static_baseline_classifier.predict( slopes_static_aggregate_test_df, y_test)
+            slopes_static_baseline_classifier.predict( slopes_static_baseline_test_df, y_test)
         slopes_static_baseline_classifier.plot_pr(precision_rt, recall_rt, "XGBoost Static")
-
-    risk_score_visualiser = Visualiser(outcomes, normalized_timeseries, non_smotedtime_series, autoencoders)
 
 
 if __name__ == '__main__' :

@@ -46,6 +46,10 @@
 			"ITUAdmission30Days",
 			"ITUAdmission50Days"
 		],
+		"classification_target": [
+			"Mortality",
+			"ITUAdmission"
+		],
 		"regression_outcome": ["PO2/FIO2"]
 	},
 	"training": {

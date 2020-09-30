@@ -4,7 +4,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 from Models.XGBoost.XGBoost import XGBoostClassifier
-from Models.MetaClassifier.DecisionMaker import DecisionMaker
+from Models.RiskScore.VisualisePopulation import DecisionMaker
 from Models.Utils import generate_slopes, get_distribution_percentages
 
 
@@ -36,15 +36,12 @@ def main():
         X_test1 = time_series_nosmote.loc[time_series_nosmote[grouping].isin(test_ids)]
         distrs_percents = [get_distribution_percentages((time_series_nosmote[outcome]).astype(int))]
         print(distrs_percents)
-        #print(" TEXT X SIZE: ", X_test1.shape)
 
         #####feature selector
         temporal_features = set(X_train.columns) - set(static_features)
 
         feature_selector = XGBoostClassifier(X_train[temporal_features], y_train,outcome, grouping)
         fs_y, fs_ths, fs_id, fs_fi = feature_selector.run_xgb("temporal")
-
-        #temporal_classifier.predict( X_test1[temporal_features], X_test1[outcome])
 
         feature_selector.predict( X_valid[temporal_features], y_valid)
 
@@ -64,8 +61,6 @@ def main():
         temporal_features.append(grouping)
         temporal_classifier = XGBoostClassifier(X_train[temporal_features], y_train,outcome, grouping)
         tm_y, tm_ths, tm_id, tm_fi = temporal_classifier.run_xgb("temporal")
-
-        #temporal_classifier.predict( X_test1[temporal_features], X_test1[outcome])
 
         temporal_classifier.predict( X_valid[temporal_features], y_valid)
 
