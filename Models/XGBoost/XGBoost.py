@@ -1,23 +1,27 @@
+import json
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 import xgboost as xgb
-from sklearn.metrics import auc, precision_recall_curve, f1_score, confusion_matrix
-from sklearn.model_selection import RepeatedStratifiedKFold, cross_val_score, cross_validate
-from sklearn.metrics import make_scorer
+from sklearn.metrics import auc, precision_recall_curve
+from sklearn.model_selection import RepeatedStratifiedKFold, cross_validate
 
-from Models.Utils import stratified_group_k_fold, get_distribution, get_distribution_scalars
 from Models.Metrics import performance_metrics
+from Models.Utils import get_distribution, get_distribution_scalars
 
 class XGBoostClassifier():
-    def __init__(self, X, y,outcome, grouping):
+    def __init__(self, X, y,outcome, grouping, saved_model = None):
 
         self.predicted_probabilities = pd.DataFrame()
         self.X = X
         self.y = y.astype(int)
         self.outcome = outcome
         self.grouping = grouping
+        configs = json.load(open('Configuration.json', 'r'))
+        self.output_path = configs['paths']['xgboost_output_path']
+
         class_distributions = [get_distribution_scalars(y.astype(int))]
 
         class_weights = class_distributions[0][0] / class_distributions[0][1]
@@ -30,6 +34,13 @@ class XGBoostClassifier():
                                  subsample=1,
                                  eval_metric='error')
 
+        if saved_model != None:
+            print(" SAVED MODEL IS: ", saved_model)
+            self.model =  xgb.Booster({'nthread' : 4})  # init model
+            (self.model).load_model(saved_model)
+
+    def save_model( self, filename ):
+        self.model.save_model(filename)
 
     def fit(self, label, groups):
         x_columns = ((self.X.columns).tolist())
@@ -88,6 +99,11 @@ class XGBoostClassifier():
         plt.title(self.outcome+' Precision Recall Curive-'+label)
         plt.ylabel('Precision')
         plt.xlabel('Recall')
-        prediction_path = "Run/XGBoost/"
 
-        plt.savefig(prediction_path+self.outcome+label+"precision_recall_auc.pdf", bbox_inches='tight')
+        plt.savefig(self.output_path+self.outcome+label+"precision_recall_auc.pdf", bbox_inches='tight')
+
+    def output_performance ( self, true_class, pred_y ) :
+        perf_df = pd.DataFrame()
+        perf_dict = performance_metrics(true_class, pred_y)
+        perf_df = perf_df.append(perf_dict, ignore_index=True)
+        perf_df.to_csv(self.output_path + "performancemetrics" + self.outcome + ".csv", index=False)

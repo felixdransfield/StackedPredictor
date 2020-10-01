@@ -3,9 +3,10 @@
 		"path":  "/Users/babylon/Documents/Covid/Data/",
 		"data_path" : "/Users/babylon/Documents/Data/KCHData/",
 		"stats_path":  "/Users/babylon/Documents/Data/KCHData/Stats/",
-		"autoencoder_path": "Run/Autoencoders/",
-		"saved_models_path": "Run/SavedModels/"
-
+		"autoencoder_models_path": "Run/SavedModels/AutoEncoder/",
+		"xgboost_models_path": "Run/SavedModels/XGBoost/",
+		"autoencoder_output_path": "Run/Output/AutoEncoder/",
+		"xgboost_output_path": "Run/Output/XGBoost/"
 	},
 	"data": {
 		"grouping": "PatientID",

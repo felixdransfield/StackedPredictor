@@ -48,7 +48,7 @@ class LSTMAutoEncoder():
         self.outcome = outcome
 
         configs = json.load(open('Configuration.json', 'r'))
-        self.output_path = configs['paths']['autoencoder_path']
+        self.output_path = configs['paths']['autoencoder_output_path']
 
     def summary( self ):
         self.lstm_autoencoder.summary()
@@ -88,10 +88,10 @@ class LSTMAutoEncoder():
         return pred_y, best_threshold, precision_rt, recall_rt
 
 
-    def output_performance(self, true_class, reconstruction_error,pred_y):
+    def output_performance(self, true_class,pred_y):
 
         perf_df = pd.DataFrame()
-        perf_dict = performance_metrics(true_class, pred_y, reconstruction_error )
+        perf_dict = performance_metrics(true_class, pred_y )
         perf_df = perf_df.append(perf_dict, ignore_index=True)
         perf_df.to_csv(self.output_path +"performancemetrics"+self.outcome+".csv", index=False)
 

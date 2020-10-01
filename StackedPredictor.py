@@ -4,7 +4,7 @@ import json
 from Models.LSTMAutoEncoder.LSTMAutoEncoder import LSTMAutoEncoder
 from Models.LSTMAutoEncoder.Utils import process_data, lstm_flatten
 from Models.RiskScore.VisualisePopulation import Visualiser
-from Utils.Data import flatten
+from Utils.Data import flatten, scale, impute
 
 import pandas as pd
 from pylab import rcParams
@@ -23,7 +23,6 @@ seed(7)
 rcParams['figure.figsize'] = 8, 6
 LABELS = ["0", "1"]
 
-from Utils.Data import scale, impute
 
 
 def main () :
@@ -36,7 +35,9 @@ def main () :
     outcomes = configs['data']['classification_outcome']
     lookback = configs['data']['batch_size']
     timeseries_path = configs['paths']['data_path']
-    saved_models_path = configs['paths']['saved_models_path']
+    autoencoder_models_path = configs['paths']['autoencoder_models_path']
+    xgboost_models_path = configs['paths']['xgboost_models_path']
+
 
     ##read, impute and scale dataset
     non_smotedtime_series = pd.read_csv(timeseries_path + "TimeSeriesAggregatedUpto0.csv")
@@ -44,7 +45,7 @@ def main () :
     normalized_timeseries = scale(non_smotedtime_series, dynamic_features)
     normalized_timeseries.insert(0, grouping, non_smotedtime_series[grouping])
 
-    autoencoders = pd.Series()
+    autoencoders = list()
     ##start working per outcome
     for outcome in outcomes :
 
@@ -52,29 +53,31 @@ def main () :
                                                              non_smotedtime_series[grouping])
 
         ##Load LSTM models if they exist, otherwise train new models and save them
-        filename = saved_models_path + configs['model']['name'] + outcome + '.h5'
-
+        autoencoder_filename = autoencoder_models_path + configs['model']['name'] + outcome + '.h5'
+        print(" autoencoder file name: ", autoencoder_filename)
         X_train, X_train_y0, X_valid_y0, X_valid, y_valid, X_test, y_test, timesteps, \
         n_features = \
             process_data(normalized_timeseries, non_smotedtime_series, outcome, grouping, lookback,
                          train_ind, test_ind)
 
-        if os.path.isfile(filename) :
+        if os.path.isfile(autoencoder_filename) :
+            print(" file exists!" , autoencoder_filename)
             autoencoder = LSTMAutoEncoder(configs['model']['name'] + outcome, outcome,
-                                          timesteps, n_features,saved_model = filename)
+                                          timesteps, n_features,saved_model = autoencoder_filename)
             autoencoder.summary()
 
         else :
+            print(" file does not exist", autoencoder_filename)
             autoencoder = LSTMAutoEncoder(configs['model']['name'] + outcome, outcome, timesteps, n_features)
             autoencoder.summary()
 
             autoencoder.fit(X_train_y0, X_train_y0, epochs, lookback, X_valid_y0, X_valid_y0, 2)
             autoencoder.plot_history()
             ###save model
-            filename = saved_models_path+ configs['model']['name'] + outcome+ '.h5'
+            filename = autoencoder_models_path+ configs['model']['name'] + outcome+ '.h5'
             autoencoder.save_model(filename)
 
-        autoencoders.append(filename)
+        autoencoders.append(autoencoder_filename)
         ####Predicting using the fitted model (loaded or trained)
 
         train_x_predictions = autoencoder.predict(X_train)
@@ -91,7 +94,7 @@ def main () :
         pred_y, best_threshold, precision_rt, recall_rt = \
               autoencoder.predict_binary(test_error_df.True_class, test_error_df.Reconstruction_error)
 
-        autoencoder.output_performance(test_error_df.True_class, test_error_df.Reconstruction_error, pred_y)
+        autoencoder.output_performance(test_error_df.True_class, pred_y)
         autoencoder.plot_reconstruction_error(test_error_df, best_threshold)
         autoencoder.plot_roc(test_error_df)
         autoencoder.plot_pr(precision_rt, recall_rt)
@@ -103,7 +106,6 @@ def main () :
 
         testing_ids = non_smotedtime_series.iloc[test_ind[1]]
         testing_ids = testing_ids[grouping]
-
 
         flat_df ,timesteps= flatten (non_smotedtime_series, dynamic_features, grouping, static_features, outcome)
         temporal_features = set(flat_df.columns) - set(static_features)
@@ -175,16 +177,27 @@ def main () :
         slopes_static_aggregate_test_df['mse'] = mse_test
 
 
-        slopes_static_baseline_classifier = XGBoostClassifier(slopes_static_aggregate_train_df,
-                                                              y_train, outcome, grouping)
+        xgboost_filename = xgboost_models_path + configs['model']['name'] + outcome + '.bin'
+        if os.path.isfile(xgboost_filename) :
+            slopes_static_baseline_classifier = XGBoostClassifier(slopes_static_aggregate_train_df,
+                                                              y_train, outcome, grouping,
+                                                                  saved_model = xgboost_filename)
 
-        slopes_static_baseline_classifier.fit("aggregate_slopes_static_slope", slopes_static_aggregate_train_groups)
+        else:
+            slopes_static_baseline_classifier = XGBoostClassifier(slopes_static_aggregate_train_df,
+                                                              y_train, outcome, grouping)
+            slopes_static_baseline_classifier.fit("aggregate_slopes_static_slope", slopes_static_aggregate_train_groups)
+            #slopes_static_baseline_classifier.save_model(xgboost_filename)
+
         y_pred_binary, best_threshold, precision_rt, recall_rt = \
             slopes_static_baseline_classifier.predict( slopes_static_aggregate_test_df, y_test)
+
+        slopes_static_baseline_classifier.output_performance(y_test, y_pred_binary)
+
         slopes_static_baseline_classifier.plot_pr(precision_rt, recall_rt, "XGBoost Static")
 
-    risk_score_visualiser = Visualiser(outcomes, normalized_timeseries, non_smotedtime_series, autoencoders)
-
-
+    #risk_score_visualiser = Visualiser(normalized_timeseries, non_smotedtime_series,
+     #                                  dynamic_features, static_features
+      #                                 )
 if __name__ == '__main__' :
     main()

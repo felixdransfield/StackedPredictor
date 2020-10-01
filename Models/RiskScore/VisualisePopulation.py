@@ -3,24 +3,30 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 
+from Models.Utils import generate_slopes, generate_aggregates
+from Utils.Data import flatten, scale
+
+
 from Models.LSTMAutoEncoder.LSTMAutoEncoder import LSTMAutoEncoder
 from Models.LSTMAutoEncoder.Utils import curve_shift, lstm_flatten
 
 
 class Visualiser():
 
-    def __init__(self, df_dynamic, df_full):
+    def __init__(self, df_dynamic, df_full, dynamic_features, static_features):
         configs = json.load(open('Configuration.json', 'r'))
         lookback = configs['data']['batch_size']
         grouping = configs['data']['grouping']
-        saved_models_path = configs['paths']['saved_models_path']
+        autoencoder_models_path = configs['paths']['autoencoder_models_path']
         outcomes = configs['data']['classification_outcome']
 
         self.risk_scores = pd.DataFrame()
         self.no_scores = 0
         for outcome in outcomes:
-            X, y, timesteps, nfeatures = self.reshape_data(df_dynamic, df_full, outcome, grouping, lookback)
-            filename = saved_models_path+ configs['model']['name'] + outcome+ '.h5'
+            X, y, timesteps, nfeatures = self.reshape_data_encoder(df_dynamic, df_full, outcome, grouping, lookback)
+            X_xgb, y_xgb, = self.reshape_data_xgboost(df_full, dynamic_features,static_features, outcome, grouping)
+
+            filename = autoencoder_models_path+ configs['model']['name'] + outcome+ '.h5'
 
             autoencoder = LSTMAutoEncoder(configs['model']['name'] + outcome, outcome,
                                           timesteps, nfeatures ,saved_model = filename)
@@ -63,7 +69,33 @@ class Visualiser():
         #plt.xlabel('Epoch')
         plt.savefig(target+".pdf", bbox_inches='tight')
 
-    def reshape_data(self, dynamic_series, full_series, outcome, grouping, lookback):
+    def reshape_data_xgboost(self, full_series, dynamic_features, static_features, outcome, grouping):
+
+        flat_df ,timesteps= flatten (full_series, dynamic_features, grouping, static_features, outcome)
+        temporal_features = set(flat_df.columns) - set(static_features)
+        temporal_features = set(temporal_features) - set([outcome,grouping])
+
+        X_working = flat_df
+        y_working = X_working[outcome].astype(int)
+        training_groups  = X_working[grouping]
+        X_working_static = X_working[static_features]
+        X_working_static.loc[grouping] = training_groups
+        X_working = X_working[temporal_features]
+        X_working = scale(X_working, temporal_features)
+
+        slopes_df = generate_slopes ( X_working, temporal_features, static_features,grouping, training_groups)
+        aggregate_df = generate_aggregates ( X_working, temporal_features, grouping, training_groups )
+
+        slopes_static_aggregate_df = pd.concat([slopes_df, X_working_static], axis=1,join='inner')
+        slopes_static_aggregate_df = pd.concat([slopes_static_aggregate_df, aggregate_df], axis=1,join='inner')
+
+        slopes_static_aggregate_df = slopes_static_aggregate_df.loc[:, ~slopes_static_aggregate_df.columns.duplicated()]
+        slopes_static_aggregate_groups  = slopes_static_aggregate_df[grouping]
+        slopes_static_aggregate_df.drop(columns = [grouping], inplace=True, axis=1)
+
+        return slopes_static_aggregate_df, y_working
+
+    def reshape_data_encoder(self, dynamic_series, full_series, outcome, grouping, lookback):
 
         dynamic_series.insert(len(dynamic_series.columns), outcome, full_series[outcome])
         dynamic_series[outcome] = dynamic_series[outcome].astype(int)
@@ -91,7 +123,9 @@ class Visualiser():
 
         timesteps = X_working.shape[1]  # equal to the lookback
         n_features = X_working.shape[2]  # 59
+        X_autoencoder = X_working
 
-        return X_working, aggregated_y_working, timesteps, n_features
+        ##now on to xgboost input
+        return X_autoencoder, aggregated_y_working, timesteps, n_features
 
 
