@@ -63,7 +63,6 @@ class XGBoostClassifier():
               np.mean(scores['test_precision_macro']), 'mean Recall Macro' ,
               np.mean(scores['test_recall_macro']))
 
-        #print(cv_results['test_tp'])
         self.model.fit(X,y)
         #return predicted_Y, predicted_thredholds, predicted_IDs, self.model.feature_importances_
 

@@ -10,8 +10,6 @@ import pandas as pd
 from pylab import rcParams
 import numpy as np
 
-from keras.callbacks import ModelCheckpoint, TensorBoard
-
 from numpy.random import seed
 
 from Models.Utils import get_train_test_split, generate_slopes, generate_aggregates
@@ -45,10 +43,8 @@ def main () :
     normalized_timeseries = scale(non_smotedtime_series, dynamic_features)
     normalized_timeseries.insert(0, grouping, non_smotedtime_series[grouping])
 
-    autoencoders = list()
     ##start working per outcome
     for outcome in outcomes :
-
         fold_ind, train_ind, test_ind = get_train_test_split(non_smotedtime_series[outcome].astype(int),
                                                              non_smotedtime_series[grouping])
 
@@ -61,24 +57,18 @@ def main () :
                          train_ind, test_ind)
 
         if os.path.isfile(autoencoder_filename) :
-            print(" file exists!" , autoencoder_filename)
+            print(" Autoencoder trained model exists for oucome", outcome,"file:" , autoencoder_filename)
             autoencoder = LSTMAutoEncoder(configs['model']['name'] + outcome, outcome,
                                           timesteps, n_features,saved_model = autoencoder_filename)
             autoencoder.summary()
 
         else :
-            print(" file does not exist", autoencoder_filename)
+            print("Autencoder trained model does not exist for outcome", outcome, "file:", autoencoder_filename)
             autoencoder = LSTMAutoEncoder(configs['model']['name'] + outcome, outcome, timesteps, n_features)
             autoencoder.summary()
 
             autoencoder.fit(X_train_y0, X_train_y0, epochs, lookback, X_valid_y0, X_valid_y0, 2)
             autoencoder.plot_history()
-            ###save model
-            filename = autoencoder_models_path+ configs['model']['name'] + outcome+ '.h5'
-            #autoencoder.save_model(filename)
-
-        autoencoders.append(autoencoder_filename)
-        ####Predicting using the fitted model (loaded or trained)
 
         train_x_predictions = autoencoder.predict(X_train)
         mse_train = np.mean(np.power(lstm_flatten(X_train) - lstm_flatten(train_x_predictions), 2), axis=1)
@@ -89,7 +79,6 @@ def main () :
 
         test_error_df = pd.DataFrame({'Reconstruction_error' : mse_test,
                                       'True_class' : y_test.tolist()})
-
 
         pred_y, best_threshold, precision_rt, recall_rt = \
               autoencoder.predict_binary(test_error_df.True_class, test_error_df.Reconstruction_error)
@@ -128,36 +117,12 @@ def main () :
         X_test = scale(X_test, temporal_features)
         X_test['mse'] = mse_test
 
-
-        feature_selector = XGBoostClassifier(X_train, y_train,outcome, grouping)#
-        feature_selector.fit("temporal", training_groups)
-
-        y_pred_binary, best_threshold, precision_rt, recall_rt = feature_selector.predict( X_test, y_test)
-        feature_selector.plot_pr(precision_rt, recall_rt, "XGBoost Temporal")
-
-        featuredf = pd.DataFrame()
-
-        temporal_features = set(temporal_features) - set([outcome])
-        featuredf['features'] = list(temporal_features)
-        #featuredf['imp'] = fs_fi
-        #featuredf = featuredf[featuredf['imp'] > 0]
         ########
-        baseline_features = featuredf['features']
-
-        baseline_features= set([x.partition('_')[0] for x in list(baseline_features)])
-
-        baseline_features = [x+"_0" for x in list(baseline_features)]
-
-        baseline_features.insert(0,grouping)
-        baseline_static_features = baseline_features + static_features
-
-
         slopes_df = generate_slopes ( X_train, temporal_features, static_features,grouping, training_groups)
         aggregate_df = generate_aggregates ( X_train, temporal_features, grouping, training_groups )
 
         slopes_static_aggregate_train_df = pd.concat([slopes_df, X_train_static], axis=1,join='inner')
         slopes_static_aggregate_train_df = pd.concat([slopes_static_aggregate_train_df, aggregate_df], axis=1,join='inner')
-
         slopes_static_aggregate_train_df = slopes_static_aggregate_train_df.loc[:, ~slopes_static_aggregate_train_df.columns.duplicated()]
         slopes_static_aggregate_train_groups  = slopes_static_aggregate_train_df[grouping]
         slopes_static_aggregate_train_df.drop(columns = [grouping], inplace=True, axis=1)
@@ -165,12 +130,9 @@ def main () :
 
         slopes_df_test = generate_slopes ( X_test, temporal_features, static_features, grouping, testing_groups)
         aggregate_df_test = generate_aggregates ( X_test, temporal_features, grouping, testing_groups )
-
         slopes_static_aggregate_test_df = pd.concat([slopes_df_test, X_test_static], axis=1,join='inner')
         slopes_static_aggregate_test_df = pd.concat([slopes_static_aggregate_test_df, aggregate_df_test], axis=1,join='inner')
-
         slopes_static_aggregate_test_df = slopes_static_aggregate_test_df.loc[:, ~slopes_static_aggregate_test_df.columns.duplicated()]
-        slopes_static_baseline_test_groups  = slopes_static_aggregate_test_df[grouping]
         slopes_static_aggregate_test_df.drop(columns = [grouping], inplace=True,axis=1)
         slopes_static_aggregate_test_df['mse'] = mse_test
 
