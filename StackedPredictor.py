@@ -75,7 +75,7 @@ def main () :
             autoencoder.plot_history()
             ###save model
             filename = autoencoder_models_path+ configs['model']['name'] + outcome+ '.h5'
-            autoencoder.save_model(filename)
+            #autoencoder.save_model(filename)
 
         autoencoders.append(autoencoder_filename)
         ####Predicting using the fitted model (loaded or trained)
@@ -119,8 +119,6 @@ def main () :
         X_train = X_train[temporal_features]
         X_train = scale(X_train, temporal_features)
         X_train['mse'] = mse_train
-
-        #X_train, y_train = smote(X_train, y_train)
         X_test = flat_df.loc[flat_df[grouping].isin(testing_ids)]
         y_test = X_test[outcome].astype(int)
         testing_groups = X_test[grouping]
@@ -196,6 +194,21 @@ def main () :
 
         slopes_static_baseline_classifier.plot_pr(precision_rt, recall_rt, "XGBoost Static")
 
+
+        #delete variables
+        del slopes_static_aggregate_train_df
+        del slopes_static_aggregate_test_df
+        del X_train
+        del X_train_y0
+        del X_valid_y0
+        del X_valid
+        del y_valid
+        del X_test
+        del y_test
+        del timesteps
+        del train_x_predictions
+        del test_x_predictions
+        del test_error_df
     #risk_score_visualiser = Visualiser(normalized_timeseries, non_smotedtime_series,
      #                                  dynamic_features, static_features
       #                                 )

@@ -1,6 +1,7 @@
 import os
 import json
 import pandas as pd
+import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
 from Models.XGBoost.XGBoost import XGBoostClassifier
@@ -53,25 +54,6 @@ def main():
         featuredf['features'] = list(temporal_features)
         featuredf['imp'] = fs_fi
         featuredf = featuredf[featuredf['imp']> 0]
-        ######temporal classifier
-
-        #temporal_features = set(X_train.columns) - set(static_features)
-
-        temporal_features = featuredf['features'].tolist()
-        temporal_features.append(grouping)
-        temporal_classifier = XGBoostClassifier(X_train[temporal_features], y_train,outcome, grouping)
-        tm_y, tm_ths, tm_id, tm_fi = temporal_classifier.run_xgb("temporal")
-
-        temporal_classifier.predict( X_valid[temporal_features], y_valid)
-
-        decision_maker.add_classifier(outcome+"Tmp", tm_y, tm_ths, tm_id, tm_fi)
-
-        featuredf = pd.DataFrame()
-
-        temporal_features.remove(grouping)
-        featuredf['features'] = list(temporal_features)
-        featuredf['imp'] = tm_fi
-        featuredf = featuredf[featuredf['imp']> 0]
 
         ########################################
         #baseline and static
@@ -99,6 +81,7 @@ def main():
 
         bs_y, bs_ths, bs_id, bs_fi = slopes_static_baseline_classifier.run_xgb("baseline_static_slope")
         slopes_static_baseline_classifier.predict( slopes_static_baseline_test_df, y_valid)
+        tf.keras.backend.clear_session()
 
         decision_maker.add_classifier(outcome+"bss", bs_y, bs_ths, bs_id, bs_fi)
 

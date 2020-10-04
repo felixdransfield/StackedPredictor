@@ -18,6 +18,8 @@ import tensorflow as tf
 from keras import optimizers, Sequential
 from keras.layers import Dense, LSTM, RepeatVector, TimeDistributed
 from keras.models import load_model
+from keras.callbacks import EarlyStopping, ModelCheckpoint
+
 
 
 class LSTMAutoEncoder():
@@ -26,18 +28,21 @@ class LSTMAutoEncoder():
             self.lstm_autoencoder = Sequential(name = name)
         # Encoder
             self.lstm_autoencoder.add(LSTM(32, activation='relu', input_shape=(timesteps, n_features), return_sequences=True))
+            #self.lstm_autoencoder.add(LSTM(16, activation='relu', input_shape=(timesteps, n_features), return_sequences=True))
             self.lstm_autoencoder.add(LSTM(16, activation='relu', return_sequences=False))
             self.lstm_autoencoder.add(Dropout(0.5))
 
             self.lstm_autoencoder.add(RepeatVector(timesteps))
         # Decoder
+            #self.lstm_autoencoder.add(LSTM(8, activation='relu', return_sequences=True))
             self.lstm_autoencoder.add(LSTM(16, activation='relu', return_sequences=True))
             self.lstm_autoencoder.add(Dropout(0.5))
             self.lstm_autoencoder.add(LSTM(32, activation='relu', return_sequences=True))
+
             self.lstm_autoencoder.add(TimeDistributed(Dense(n_features)))
             lr = 0.001
             adam = optimizers.Adam(lr)
-            (self.lstm_autoencoder).compile(loss='mse', optimizer=adam)
+            (self.lstm_autoencoder).compile(loss='mse', optimizer=adam, metrics=["mean_squared_error"])
 
             self.history = None
 
@@ -58,10 +63,23 @@ class LSTMAutoEncoder():
         print('>Saved %s' % filename)
 
     def fit(self, trainx, trainy,e, b,val_x, val_y,v):
+        configs = json.load(open('Configuration.json', 'r'))
+        autoencoder_models_path = configs['paths']['autoencoder_models_path']
+        es = EarlyStopping(monitor='val_loss', mode='min',
+                           verbose=1, patience=50, restore_best_weights=True)
+
+        filename = autoencoder_models_path + configs['model']['name'] + self.outcome + '.h5'
+
+        mc = ModelCheckpoint(filename, monitor='val_loss', save_best_only=True, verbose=1)
+
         history = self.lstm_autoencoder.fit(trainx, trainy,epochs = e, batch_size = b,
-                          validation_data = (val_x,val_y), verbose = v).history
+                          validation_data = (val_x,val_y), verbose = v,
+                                            callbacks=[es,mc]).history
         self.history = history
-      #self.history = history
+
+        best_acc = max(self.history["val_loss"])
+        _, eval_acc =(self.lstm_autoencoder).evaluate(val_x, val_y, verbose=0)
+        print(f"Best accuracy in training: {best_acc}. In evaluation: {eval_acc}\n")
 
     def plot_history( self ):
         plt.figure(figsize=(10, 10))
