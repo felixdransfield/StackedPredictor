@@ -6,7 +6,10 @@
 		"autoencoder_models_path": "Run/SavedModels/AutoEncoder/",
 		"xgboost_models_path": "Run/SavedModels/XGBoost/",
 		"autoencoder_output_path": "Run/Output/AutoEncoder/",
-		"xgboost_output_path": "Run/Output/XGBoost/"
+		"xgboost_output_path": "Run/Output/XGBoost/",
+		"classification_report_path": "Run/ClassificationReport/",
+		"test_data_path": "Run/Output/TestSets/"
+
 	},
 	"data": {
 		"grouping": "PatientID",
@@ -36,26 +39,38 @@
 			"WBC"
 		],
 		"classification_outcome": [
+			"Mortality3Days",
 			"Mortality5Days",
 			"Mortality7Days",
 			"Mortality14Days",
 			"Mortality30Days",
-			"Mortality50Days",
+			"ITUAdmission3Days",
 			"ITUAdmission5Days",
 			"ITUAdmission7Days",
 			"ITUAdmission14Days",
-			"ITUAdmission30Days",
-			"ITUAdmission50Days"
+			"ITUAdmission30Days"
 		],
 		"classification_target": [
 			"Mortality",
 			"ITUAdmission"
 		],
-		"regression_outcome": ["PO2/FIO2"]
+		"regression_outcome": ["PO2/FIO2"],
+		"classification_labels": [
+			" 3D MOR",
+			" 5D MOR",
+			" 7D MOR",
+			"14D MOR",
+			"30D MOR",
+			" 3D ITU",
+			" 5D ITU",
+			" 7D ITU",
+			"14D ITU",
+			"30D ITU"
+		]
 	},
 	"training": {
 		"folds": 10,
-		"epochs": 500
+		"epochs": 400
 	},
 	"model": {
 		"name": "lstm-binary-classifier",

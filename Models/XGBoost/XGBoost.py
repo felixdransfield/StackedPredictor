@@ -35,35 +35,28 @@ class XGBoostClassifier():
                                  eval_metric='error')
 
         if saved_model != None:
-            print(" SAVED MODEL IS: ", saved_model)
             self.model =  xgb.Booster({'nthread' : 4})  # init model
             (self.model).load_model(saved_model)
 
     def save_model( self, filename ):
         self.model.save_model(filename)
 
-    def fit(self, label, groups):
+    def fit(self, label, sample_weights):
         x_columns = ((self.X.columns).tolist())
         X = self.X[x_columns]
         X.reset_index()
         y = self.y
         y.reset_index()
 
-        #X, y  = smote(X, y)
-
-        print(label+" Y distribution after smoting ", get_distribution(y))
-
         cv = RepeatedStratifiedKFold(n_splits=10, n_repeats=3, random_state=1)
-        scores = cross_validate(self.model.fit(X,y), X, y, scoring=['f1_macro', 'precision_macro',
+        scores = cross_validate(self.model.fit(X,y, sample_weight=sample_weights), X, y, scoring=['f1_macro', 'precision_macro',
                                                                     'recall_macro'], cv=cv, n_jobs=-4)
 
-
-        #print('Mean F1 Macro: %.3f' % np.mean(scores['test_tp']))
         print(label+'Mean F1 Macro:', np.mean(scores['test_f1_macro']), 'Mean Precision Macro: ',
               np.mean(scores['test_precision_macro']), 'mean Recall Macro' ,
               np.mean(scores['test_recall_macro']))
 
-        self.model.fit(X,y)
+        #self.model.fit(X,y,sample_weight=sample_weights)
         #return predicted_Y, predicted_thredholds, predicted_IDs, self.model.feature_importances_
 
 
@@ -83,7 +76,7 @@ class XGBoostClassifier():
         best_threshold = thresholds[ix]
         y_pred_binary = (yhat > thresholds[ix]).astype('int32')
 
-        return y_pred_binary, best_threshold, precision_rt, recall_rt
+        return y_pred_binary, best_threshold, precision_rt, recall_rt, yhat
 
 
     def plot_pr( self, precision, recall, label):
@@ -105,4 +98,4 @@ class XGBoostClassifier():
         perf_df = pd.DataFrame()
         perf_dict = performance_metrics(true_class, pred_y)
         perf_df = perf_df.append(perf_dict, ignore_index=True)
-        perf_df.to_csv(self.output_path + "performancemetrics" + self.outcome + ".csv", index=False)
+        perf_df.to_csv(self.output_path + "xgboostperformancemetrics" + self.outcome + ".csv", index=False)

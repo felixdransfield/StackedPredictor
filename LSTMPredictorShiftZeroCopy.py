@@ -6,7 +6,7 @@ from sklearn.model_selection import train_test_split
 import Models
 from Models.LSTMAutoEncoder.LSTMAutoEncoder import LSTMAutoEncoder
 from Models.LSTMAutoEncoder.Utils import process_data, flatten
-from Models.RiskScore.VisualisePopulation import DecisionMaker
+from ProcessResults.VisualisePopulation import DecisionMaker
 from Models.Metrics import performance_metrics
 import matplotlib.pyplot as plt
 

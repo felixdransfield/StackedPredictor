@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 
 import Models
 from Models.LSTMAutoEncoder.Utils import temporalize, flatten, scale, curve_shift
-from Models.RiskScore.VisualisePopulation import DecisionMaker
+from ProcessResults.VisualisePopulation import DecisionMaker
 from Models.Utils import generate_slopes, get_distribution_percentages
 
 import matplotlib.pyplot as plt
@@ -19,14 +19,11 @@ from pylab import rcParams
 from keras import Input
 from numpy import newaxis
 
-from keras.layers import Dense, Activation, Dropout, LSTM, RepeatVector, TimeDistributed, Masking
 from keras.models import Sequential, load_model
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 
-import tensorflow as tf
 from keras import optimizers, Sequential
 from keras.models import Model
-from keras.utils import plot_model
 from keras.layers import Dense, LSTM, RepeatVector, TimeDistributed
 from keras.callbacks import ModelCheckpoint, TensorBoard
 
@@ -34,8 +31,7 @@ from keras.callbacks import ModelCheckpoint, TensorBoard
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, precision_recall_curve
-from sklearn.metrics import recall_score, classification_report, auc, roc_curve
-from sklearn.metrics import precision_recall_fscore_support, f1_score
+from sklearn.metrics import recall_score, auc, roc_curve
 
 from numpy.random import seed
 seed(7)
@@ -106,8 +102,8 @@ def main():
         print('colwise mean', np.mean(a, axis=0).round(6))
         print('colwise variance', np.var(a, axis=0))
 
-        X_valid_scaled = Models.LSTMAutoEncoder.Utils.scale(X_valid, scaler)
-        X_test_scaled = Models.LSTMAutoEncoder.Utils.scale(X_test, scaler)
+        X_valid_scaled = LSTMAutoEncoder.Utils.scale(X_valid, scaler)
+        X_test_scaled = LSTMAutoEncoder.Utils.scale(X_test, scaler)
 
         timesteps = X_train.shape[1]  # equal to the lookback
         n_features = X_train.shape[2]  # 59

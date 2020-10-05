@@ -72,7 +72,9 @@ def get_distribution ( y_vals ) :
 
 def get_distribution_scalars( y_vals ) :
     y_distr = Counter(y_vals)
-    return [int(y_distr[i]) for i in range(np.max(y_vals) + 1)]
+    y_vals_sum = sum(y_distr.values())
+
+    return [y_distr[i]/ y_vals_sum for i in range(np.max(y_vals) + 1)]
 
 def get_distribution_percentages ( y_vals ) :
     y_distr = Counter(y_vals)
@@ -105,6 +107,16 @@ def class_weights(y):
     return class_weight
 
 
+def class_counts(y):
+    total = len(y)
+    neg = np.count_nonzero(y == 0)
+    pos = np.count_nonzero(y == 1)
+
+    class_weight = {0 : neg, 1 : pos}
+
+    return class_weight
+
+
 def generate_slopes(X, dynamic_columns, static_columns, id_col, training_groups):
 
     slopes_df = pd.DataFrame()
@@ -127,32 +139,36 @@ def generate_slopes(X, dynamic_columns, static_columns, id_col, training_groups)
 
 
 def generate_aggregates(X, dynamic_columns, id_col, training_groups):
-
     agg_df = pd.DataFrame()
     agg_df.insert(0, id_col, training_groups)
-
-    abstract_cols = [x for x in dynamic_columns if int(x.partition('_')[2]) ==0]
-    abstract_cols = [x.partition('_')[0] for x in abstract_cols]
+    abstract_cols = [x.partition('_')[0] for x in dynamic_columns if int(x.partition('_')[2]) ==0]
 
     for col in abstract_cols:
         col_aggregate = aggregation[col]
-        print(col, ":", col_aggregate)
-        batch_columns = [x for x in X.columns.tolist() if x.partition('_')[1] == col]
+        batch_columns = [x for x in X.columns.tolist() if x.partition('_')[0] == col]
 
-        batch = X[batch_columns]
-        label = ""
         if col_aggregate =='min':
-            new_col = X.min(axis=1)
+            new_col = X[batch_columns].min(axis=1)
             label="_min"
+            agg_df[col + label] = new_col
         elif col_aggregate =='max':
-            new_col = X.max(axis=1)
+            new_col = X[batch_columns].max(axis=1)
             label="_max"
+            agg_df[col + label] = new_col
+        elif col_aggregate=='min/max':
+            new_col = X[batch_columns].max(axis=1)
+            label="_max"
+            agg_df[col + label] = new_col
+            new_col = X[batch_columns].min(axis=1)
+            label="_min"
+            agg_df[col + label] = new_col
         else:
-            new_col = X.mean(axis=1)
+            new_col = X[batch_columns].mean(axis=1)
             label="_mean"
-        agg_df[col+label] = new_col
+            agg_df[col + label] = new_col
 
-        return agg_df
+    agg_df.to_csv("aggreagte.csv", index=False)
+    return agg_df
 
 def apply_func(df, col):
     return df.apply(aggregation[col], axis=1)
@@ -171,6 +187,7 @@ def scale(df, scale_columns):
     normalized_df = pd.DataFrame(scaler.fit_transform(df[scale_columns]))
     normalized_df.columns = scale_columns
 
+    print(" in scaling, columns are:", scale_columns, len(scale_columns))
     return normalized_df
 
 

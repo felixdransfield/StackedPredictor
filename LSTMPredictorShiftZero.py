@@ -3,7 +3,7 @@ import json
 
 from Models.LSTMAutoEncoder.LSTMAutoEncoder import LSTMAutoEncoder
 from Models.LSTMAutoEncoder.Utils import process_data, flatten
-from Models.RiskScore.VisualisePopulation import DecisionMaker
+from ProcessResults.VisualisePopulation import DecisionMaker
 import matplotlib.pyplot as plt
 
 import pandas as pd

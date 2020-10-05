@@ -1,7 +1,7 @@
 import os
 import json
 
-from Models.RiskScore.VisualisePopulation import Visualiser
+from ProcessResults.VisualisePopulation import Visualiser
 import pandas as pd
 from pylab import rcParams
 

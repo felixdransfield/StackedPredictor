@@ -5,14 +5,9 @@ from Models.LSTMAutoEncoder.LSTMAutoEncoder import LSTMAutoEncoder
 from Models.LSTMAutoEncoder.Utils import process_data, lstm_flatten
 from ProcessResults.ClassificationReport import ClassificationReport
 from Utils.Data import flatten, scale, impute
-from Models.Metrics import perf_measure
-import pandas as pd
-pd.set_option('display.max_rows', None)
-pd.set_option('display.max_columns', None)
-pd.set_option('display.width', None)
 
+import pandas as pd
 from pylab import rcParams
-from Models.Utils import class_weights, class_counts
 import numpy as np
 np.seterr(divide='ignore')
 
@@ -113,66 +108,57 @@ def main () :
             y_train = X_train[outcome].astype(int)
             training_groups  = X_train[grouping]
             X_train_static = X_train[static_features]
-            X_train_static[grouping] = training_groups
+            X_train_static.loc[grouping] = training_groups
             X_train = X_train[temporal_features]
-
+            X_train = scale(X_train, temporal_features)
+            X_train['mse'] = mse_train
             X_test = flat_df.loc[flat_df[grouping].isin(testing_ids)]
             y_test = X_test[outcome].astype(int)
             testing_groups = X_test[grouping]
             X_test_static = X_test[static_features]
             X_test_static.loc[grouping] = testing_groups
             X_test= X_test[temporal_features]
-
-            TEST_MSE = pd.DataFrame()
-            TEST_MSE['true'] = y_test
-            TEST_MSE['MSE'] = mse_test
-
-            TEST_MSE.to_csv("TESTMSE.csv", index=False)
+            X_test = scale(X_test, temporal_features)
+            X_test['mse'] = mse_test
 
             ########
+            slopes_df = generate_slopes ( X_train, temporal_features, static_features,grouping, training_groups)
             aggregate_df = generate_aggregates ( X_train, temporal_features, grouping, training_groups )
 
-            static_aggregate_train_df = pd.concat([aggregate_df, X_train_static], axis=1,join='inner')
-            static_aggregate_train_df = static_aggregate_train_df.loc[:, ~static_aggregate_train_df.columns.duplicated()]
-            static_aggregate_train_df.drop(columns = [grouping], inplace=True, axis=1)
-            static_aggregate_train_df['mse'] = mse_train
+            slopes_static_aggregate_train_df = pd.concat([slopes_df, X_train_static], axis=1,join='inner')
+            slopes_static_aggregate_train_df = pd.concat([slopes_static_aggregate_train_df, aggregate_df], axis=1,join='inner')
+            slopes_static_aggregate_train_df = slopes_static_aggregate_train_df.loc[:, ~slopes_static_aggregate_train_df.columns.duplicated()]
+            slopes_static_aggregate_train_groups  = slopes_static_aggregate_train_df[grouping]
+            slopes_static_aggregate_train_df.drop(columns = [grouping], inplace=True, axis=1)
+            slopes_static_aggregate_train_df['mse'] = mse_train
 
-
+            slopes_df_test = generate_slopes ( X_test, temporal_features, static_features, grouping, testing_groups)
             aggregate_df_test = generate_aggregates ( X_test, temporal_features, grouping, testing_groups )
-            static_aggregate_test_df = pd.concat([aggregate_df_test, X_test_static], axis=1,join='inner')
-            static_aggregate_test_df = static_aggregate_test_df.loc[:, ~static_aggregate_test_df.columns.duplicated()]
-            static_aggregate_test_df.drop(columns = [grouping], inplace=True,axis=1)
-            static_aggregate_test_df['mse'] = mse_test
+            slopes_static_aggregate_test_df = pd.concat([slopes_df_test, X_test_static], axis=1,join='inner')
+            slopes_static_aggregate_test_df = pd.concat([slopes_static_aggregate_test_df, aggregate_df_test], axis=1,join='inner')
+            slopes_static_aggregate_test_df = slopes_static_aggregate_test_df.loc[:, ~slopes_static_aggregate_test_df.columns.duplicated()]
+            slopes_static_aggregate_test_df.drop(columns = [grouping], inplace=True,axis=1)
+            slopes_static_aggregate_test_df['mse'] = mse_test
 
 
-            static_aggregate_test_df.to_csv("static_aggretate.csv", index=False)
-            static_baseline_classifier = XGBoostClassifier(static_aggregate_train_df,
+            xgboost_filename = xgboost_models_path + configs['model']['name'] + outcome + '.bin'
+            if os.path.isfile(xgboost_filename) :
+                slopes_static_baseline_classifier = XGBoostClassifier(slopes_static_aggregate_train_df,
+                                                                  y_train, outcome, grouping,
+                                                                      saved_model = xgboost_filename)
+
+            else:
+                slopes_static_baseline_classifier = XGBoostClassifier(slopes_static_aggregate_train_df,
                                                                   y_train, outcome, grouping)
-
-            static_baseline_classifier.fit("aggregate_static", mse_train*100)
+                slopes_static_baseline_classifier.fit("aggregate_slopes_static_slope", slopes_static_aggregate_train_groups)
+                #slopes_static_baseline_classifier.save_model(xgboost_filename)
 
             y_pred_binary, best_threshold, precision_rt, recall_rt, yhat = \
-                static_baseline_classifier.predict(static_aggregate_test_df, y_test)
+                slopes_static_baseline_classifier.predict( slopes_static_aggregate_test_df, y_test)
 
-
-            print(" CLASS WEIGHTS FOR Y ACTUAL: ", class_counts(y_test))
-            print(" CLASS WEIGHTS FOR Y PREDICTE: ", class_counts(y_pred_binary))
-            TP, FP, TN, FN = perf_measure(y_test, y_pred_binary)
-
-            TPR = TP / (TP + FN)
-            TNR = TN / (TN + FP)
-            PPV = TP / (TP + FP)
-            NPV = TN / (TN + FN)
-            FPR = FP / (FP + TN)
-            FNR = FN / (TP + FN)
-
-            # roc_auc = auc(false_pos_rate, true_pos_rate, )
-
-            print(" XGBOOST PERFORMANCE: ", "TP", TP, "TN", TN, "FP", FP, "FN", FN)
-
-            static_baseline_classifier.output_performance(y_test, y_pred_binary)
-            static_baseline_classifier.plot_pr(precision_rt, recall_rt, "XGBoost Static")
-            to_write_for_plotting = static_aggregate_test_df
+            slopes_static_baseline_classifier.output_performance(y_test, y_pred_binary)
+            slopes_static_baseline_classifier.plot_pr(precision_rt, recall_rt, "XGBoost Static")
+            to_write_for_plotting = slopes_static_aggregate_test_df
             to_write_for_plotting['outcome'] = y_test
             to_write_for_plotting.to_csv(test_data_path+outcome+".csv", index=False)
 
@@ -183,8 +169,8 @@ def main () :
 
 
             #delete variables
-            del static_aggregate_train_df
-            del static_aggregate_test_df
+            del slopes_static_aggregate_train_df
+            del slopes_static_aggregate_test_df
             del X_train
             del X_train_y0
             del X_valid_y0
@@ -202,7 +188,7 @@ def main () :
     #After fitting model to all outcomes, plot and get summary statistics
     classification_report.plot_distributions_vs_aucs()
     classification_report.plot_pr_auc()
-    #classification_report.plot_auc()
+    classification_report.plot_auc()
 
 
 if __name__ == '__main__' :

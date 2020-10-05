@@ -3,14 +3,12 @@ import json
 
 from Models.LSTMAutoEncoder.LSTMAutoEncoder import LSTMAutoEncoder
 from Models.LSTMAutoEncoder.Utils import process_data, lstm_flatten
-from Models.RiskScore.VisualisePopulation import DecisionMaker
+from ProcessResults.VisualisePopulation import DecisionMaker
 from Utils.Data import flatten
 
 import pandas as pd
 from pylab import rcParams
 import numpy as np
-
-from keras.callbacks import ModelCheckpoint, TensorBoard
 
 from numpy.random import seed
 

@@ -1,17 +1,17 @@
 import numpy as np
 aggregation = { #ZI Check Aggregation function is appropriate
-    'Albumin': 'mean',
+    'Albumin': 'min',
     'Creatinine' : 'max',
     'C-Reactive-Protein' : 'max',
     'DiasBP' : 'min',
-    'FiO2' : 'np.mean',
+    'FiO2' : 'max',
     'Hb' : 'min',
-    'Lymphocytes' : 'np.mean',
-    'Neutrophils': 'np.mean',
-    'NEWS2' : 'np.mean',
+    'Lymphocytes' : 'mean',
+    'Neutrophils': 'mean',
+    'NEWS2' : 'mean',
     'PLT': 'min',
-    'PO2/FIO2' : 'np.mean',
+    'PO2/FIO2' : 'min',
     'SysBP' : 'min',
     'Urea' : 'max',
-    'WBC' : 'np.mean'
+    'WBC' : 'min/max'
 }

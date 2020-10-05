@@ -5,7 +5,7 @@ import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
 from Models.XGBoost.XGBoost import XGBoostClassifier
-from Models.RiskScore.VisualisePopulation import DecisionMaker
+from ProcessResults.VisualisePopulation import DecisionMaker
 from Models.Utils import generate_slopes, get_distribution_percentages
 
 
