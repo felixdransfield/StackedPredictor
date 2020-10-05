@@ -94,6 +94,11 @@ class XGBoostClassifier():
 
         plt.savefig(self.output_path+self.outcome+label+"precision_recall_auc.pdf", bbox_inches='tight')
 
+    def plot_feature_importance( self ,colnames):
+        plt.figure(figsize=(10, 10))
+        plt.bar(range(len((self.model).feature_importances_)), (self.model).feature_importances_)
+        plt.savefig(self.output_path + self.outcome  + "xgbprecision_recall_auc.pdf", bbox_inches='tight')
+
     def output_performance ( self, true_class, pred_y ) :
         perf_df = pd.DataFrame()
         perf_dict = performance_metrics(true_class, pred_y)

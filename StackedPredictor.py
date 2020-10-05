@@ -5,7 +5,6 @@ from Models.LSTMAutoEncoder.LSTMAutoEncoder import LSTMAutoEncoder
 from Models.LSTMAutoEncoder.Utils import process_data, lstm_flatten
 from ProcessResults.ClassificationReport import ClassificationReport
 from Utils.Data import flatten, scale, impute
-from Models.Metrics import perf_measure
 import pandas as pd
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
@@ -63,7 +62,7 @@ def main () :
         n_features = \
             process_data(normalized_timeseries, non_smotedtime_series, outcome, grouping, lookback,
                          train_ind, test_ind)
-        if ("3D" not in outcome) and ("5D" not in outcome) :
+        if ("3D" not in outcome) :
             if os.path.isfile(autoencoder_filename):
                 print(" Autoencoder trained model exists for oucome", outcome,"file:" , autoencoder_filename)
                 autoencoder = LSTMAutoEncoder(configs['model']['name'] + outcome, outcome,
@@ -157,21 +156,11 @@ def main () :
 
             print(" CLASS WEIGHTS FOR Y ACTUAL: ", class_counts(y_test))
             print(" CLASS WEIGHTS FOR Y PREDICTE: ", class_counts(y_pred_binary))
-            TP, FP, TN, FN = perf_measure(y_test, y_pred_binary)
-
-            TPR = TP / (TP + FN)
-            TNR = TN / (TN + FP)
-            PPV = TP / (TP + FP)
-            NPV = TN / (TN + FN)
-            FPR = FP / (FP + TN)
-            FNR = FN / (TP + FN)
-
-            # roc_auc = auc(false_pos_rate, true_pos_rate, )
-
-            print(" XGBOOST PERFORMANCE: ", "TP", TP, "TN", TN, "FP", FP, "FN", FN)
 
             static_baseline_classifier.output_performance(y_test, y_pred_binary)
             static_baseline_classifier.plot_pr(precision_rt, recall_rt, "XGBoost Static")
+            static_baseline_classifier.plot_feature_importance(static_aggregate_test_df.columns)
+
             to_write_for_plotting = static_aggregate_test_df
             to_write_for_plotting['outcome'] = y_test
             to_write_for_plotting.to_csv(test_data_path+outcome+".csv", index=False)
@@ -200,9 +189,9 @@ def main () :
      #                                  dynamic_features, static_features
       #                                 )
     #After fitting model to all outcomes, plot and get summary statistics
-    classification_report.plot_distributions_vs_aucs()
+    #classification_report.plot_distributions_vs_aucs()
     classification_report.plot_pr_auc()
-    #classification_report.plot_auc()
+    classification_report.plot_auc()
 
 
 if __name__ == '__main__' :

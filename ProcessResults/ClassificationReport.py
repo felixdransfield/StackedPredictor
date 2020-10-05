@@ -29,7 +29,7 @@ class ClassificationReport:
         print(" IN PLOT DISTRIBUTIONS, BEFORE FILTERING MODEL SUBSEST LENGTH: ",
               len(self.model_results))
 
-        model_subsets = [x for x in self.model_results if ("3D" not in x.label) and ("5D" not in x.label)]
+        model_subsets = [x for x in self.model_results if ("3D" not in x.label)]
         print(" IN PLOT DISTRIBUTIONS, AFTER FILTERING MODEL SUBSEST LENGTH: ", len(model_subsets))
         for rs in model_subsets:
             outcome = rs.label
@@ -57,13 +57,12 @@ class ClassificationReport:
         #plt.plot(percents, pr_aucs, label="PR AUC")
         #plt.plot(percents, roc_aucs, label="ROC AUC")
 
-        fig.xlim([min(percents), max(percents)])
-        fig.ylim([0, 1.01])
-        fig.legend(loc='lower right')
-        fig.title('')
-        fig.xlabel('Minority Class %')
-        fig.ylabel('Performance AUCs')
-        fig.legend(loc='lower right')
+        ax.set_xlim([min(percents), max(percents)])
+        ax.set_ylim([0, 1.01])
+        ax.legend(loc='lower right')
+        ax.set_xlabel('Minority Class %')
+        ax.set_ylabel('Performance AUCs')
+        ax.title.set_text('')
         plt.xticks(percents, pecents_str, rotation='vertical')
 
         def autolabel ( rects ) :
@@ -83,14 +82,13 @@ class ClassificationReport:
         plt.savefig(self.output_path + "distribution_plot.pdf", bbox_inches='tight')
 
     def plot_pr_auc( self ):
-        plt.figure(figsize=(15, 8))
-        model_subsets = [x for x in self.model_results if ("3D" not in x.label)
-                         and ("5D" not in x.label)]
+        plt.figure(figsize=(10, 8))
+        model_subsets = [x for x in self.model_results if ("3D" not in x.label)]
         for rs in model_subsets:
             pr_auc = auc(rs.recall_vector, rs.precision_vector)
 
             if 'Mortality' in rs.label:
-                style = 'dotted'
+                style = 'dashdot'
             else:
                 style = 'dashed'
 
@@ -100,7 +98,7 @@ class ClassificationReport:
 
             plt.xlim([-0.01, 1])
             plt.ylim([0, 1.01])
-            plt.legend(loc='lower right')
+            plt.legend(loc='lower left')
             plt.title(' Precision Recall Curve')
             plt.ylabel('Precision')
             plt.xlabel('Recall')
@@ -109,14 +107,13 @@ class ClassificationReport:
 
 
     def plot_auc( self ):
-        plt.figure(figsize=(15, 8))
-        model_subsets = [x for x in self.model_results if ("3D" not in x.label)
-                         and ("5D" not in x.label)]
+        plt.figure(figsize=(10, 8))
+        model_subsets = [x for x in self.model_results if ("3D" not in x.label)]
         for rs in model_subsets :
             fpr, tpr, _ = roc_curve(rs.y_true, rs.y_pred)
             roc_auc = auc(fpr, tpr)
             if 'Mortality' in rs.label:
-                style = 'dotted'
+                style = 'dashdot'
             else:
                 style = 'dashed'
 
