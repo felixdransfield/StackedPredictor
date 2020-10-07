@@ -1,6 +1,8 @@
 import os
 import json
 
+from sklearn.metrics import auc
+
 from Models.LSTMAutoEncoder.LSTMAutoEncoder import LSTMAutoEncoder
 from Models.LSTMAutoEncoder.Utils import process_data, lstm_flatten
 from ProcessResults.ClassificationReport import ClassificationReport
@@ -17,7 +19,7 @@ np.seterr(divide='ignore')
 
 from numpy.random import seed
 
-from Models.Utils import get_train_test_split, generate_slopes, generate_aggregates
+from Models.Utils import get_train_test_split, generate_aggregates
 from Models.XGBoost.XGBoost import XGBoostClassifier
 import os.path
 
@@ -39,7 +41,6 @@ def main () :
     lookback = configs['data']['batch_size']
     timeseries_path = configs['paths']['data_path']
     autoencoder_models_path = configs['paths']['autoencoder_models_path']
-    xgboost_models_path = configs['paths']['xgboost_models_path']
     test_data_path = configs['paths']['test_data_path']
 
     ##read, impute and scale dataset
@@ -51,6 +52,8 @@ def main () :
     #intialise classification report which will house results of all outcomes
     classification_report = ClassificationReport()
 
+    #save lstm performance for comparison with final outcome
+    lstm_praucs = []
     ##start working per outcome
     for outcome in outcomes :
         fold_ind, train_ind, test_ind = get_train_test_split(non_smotedtime_series[outcome].astype(int),
@@ -95,7 +98,8 @@ def main () :
             autoencoder.plot_reconstruction_error(test_error_df, best_threshold)
             autoencoder.plot_roc(test_error_df)
             autoencoder.plot_pr(precision_rt, recall_rt)
-
+            lstm_prauc = auc(recall_rt, precision_rt)
+            lstm_praucs.append(lstm_prauc)
             #Feature Selector
             training_loc = train_ind[0]#+train_ind[1]
             training_ids = non_smotedtime_series.iloc[training_loc]
@@ -121,12 +125,6 @@ def main () :
             X_test_static = X_test[static_features]
             X_test_static.loc[grouping] = testing_groups
             X_test= X_test[temporal_features]
-
-            TEST_MSE = pd.DataFrame()
-            TEST_MSE['true'] = y_test
-            TEST_MSE['MSE'] = mse_test
-
-            TEST_MSE.to_csv("TESTMSE.csv", index=False)
 
             ########
             aggregate_df = generate_aggregates ( X_train, temporal_features, grouping, training_groups )
@@ -189,9 +187,10 @@ def main () :
      #                                  dynamic_features, static_features
       #                                 )
     #After fitting model to all outcomes, plot and get summary statistics
-    #classification_report.plot_distributions_vs_aucs()
+    classification_report.plot_distributions_vs_aucs()
     classification_report.plot_pr_auc()
     classification_report.plot_auc()
+    classification_report.compare_lstim_xgboost(lstm_praucs)
 
 
 if __name__ == '__main__' :

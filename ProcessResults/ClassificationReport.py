@@ -3,7 +3,8 @@ from sklearn.metrics import auc, roc_curve
 import matplotlib.pyplot as plt
 import json
 from matplotlib import colors as mcolors
-
+import matplotlib.patches as mpatches
+import re
 
 class ClassificationReport:
     def __init__(self):
@@ -12,7 +13,10 @@ class ClassificationReport:
         self.model_results = []
         self.num_models=0
         self.output_path =   configs['paths']['classification_report_path']
+        self.label_dict = configs['data']['classification_label']
+
         self.colors = mcolors.XKCD_COLORS
+
 
     def add_model_result( self, label, y_true, y_pred_binary, best_threshold,
                           precision_rt, recall_rt,yhat ):
@@ -23,67 +27,71 @@ class ClassificationReport:
 
     def plot_distributions_vs_aucs( self ):
         percents = []
+        sizes = []
         pr_aucs = []
         roc_aucs = []
         outcomes = []
-        print(" IN PLOT DISTRIBUTIONS, BEFORE FILTERING MODEL SUBSEST LENGTH: ",
-              len(self.model_results))
 
         model_subsets = [x for x in self.model_results if ("3D" not in x.label)]
-        print(" IN PLOT DISTRIBUTIONS, AFTER FILTERING MODEL SUBSEST LENGTH: ", len(model_subsets))
         for rs in model_subsets:
             outcome = rs.label
             minority_percent = rs.get_minority_percentage()
+            minority_percent_sizes = rs.get_minority_percentage()*800
+
             pr_auc = rs.get_pr_auc()
             roc_auc = rs.get_roc_auc()
 
             outcomes.append(outcome)
             percents.append(minority_percent)
+            sizes.append(minority_percent_sizes)
             pr_aucs.append(pr_auc)
             roc_aucs.append(roc_auc)
 
+        fig, ax = plt.subplots(figsize=(8, 8))
+
+        y1 = pr_aucs
+        y2 = roc_aucs
+        y = y1+y2
+        x1 = range(1, len(y1)+1)
+        x2 = range(1, len(y2)+1)
+        x = list(x1)+list(x2)
+        colors1 = ['C0'] * len(y1)
+        colors2 = ['C1'] * len(y2)
+        colors = colors1+colors2
+
+        sizes = sizes + sizes
+        scatter = ax.scatter(x, y, c = colors, s=sizes, alpha=0.5, label="PR-AUC")
+
+        #handles, labels = scatter.legend_elements(prop="colors", alpha=0.5)
+
+        handles, labels = scatter.legend_elements(prop="sizes", alpha=0.5)
+        labels = [str(round((float(re.sub("[^0-9.]","",x))*(1/8)),2)) for x in labels]
+
+        legend1 = ax.legend(handles, labels, loc="center right", title="Minority %")
+        ax.add_artist(legend1)
+
+        prauc_patch = mpatches.Patch(color='C0', label='ROC-AUC')
+        prauc_patch.set_alpha(0.5)
+        rocauc_patch = mpatches.Patch(color='C1', label='PR-AUC')
+        rocauc_patch.set_alpha(0.5)
+        legend2 = ax.legend(handles= [prauc_patch, rocauc_patch], loc="lower right", title="Performance")
+        ax.add_artist(legend2)
+
+        outcome_labels = [self.label_dict[k] for k in outcomes]
         seq_len = range(1, len(outcomes)+1)
-        fig, ax = plt.subplots()
-        plt.figure(figsize=(15, 8))
-        pecents_str = [str(round(x,2))+y for x,y in zip(percents,outcomes)]
-        ax.set_xticklabels(pecents_str)
-
-        sizes = [x*100 for x in percents]
-        print(" length of sequence: ", len(seq_len))
-        print(" length of precision and roc: ", len(pr_aucs), len(roc_aucs))
-        rects1 = ax.scatter(seq_len, pr_aucs, s=sizes, label='PR AUC')
-        rects2 = ax.scatter(seq_len, roc_aucs, s=sizes, label='ROC AUC')
-
-        #plt.plot(percents, pr_aucs, label="PR AUC")
-        #plt.plot(percents, roc_aucs, label="ROC AUC")
-
-        ax.set_xlim([min(percents), max(percents)])
-        ax.set_ylim([0, 1.01])
-        ax.legend(loc='lower right')
-        ax.set_xlabel('Minority Class %')
-        ax.set_ylabel('Performance AUCs')
-        ax.title.set_text('')
-        plt.xticks(percents, pecents_str, rotation='vertical')
-
-        def autolabel ( rects ) :
-            """Attach a text label above each bar in *rects*, displaying its height."""
-            for rect in rects :
-                height = rect.get_height()
-                plt.annotate('{}'.format(height),
-                            xy=(rect.get_x() + rect.get_width() / 2, height),
-                            xytext=(0, 3),  # 3 points vertical offset
-                            textcoords="offset points",
-                            ha='center', va='bottom')
-
-        autolabel(rects1)
-        autolabel(rects2)
-        fig.tight_layout()
+        plt.title('Minority Distribution vs Performance')
+        plt.xlabel('Outcome')
+        plt.ylabel("Performance: ROC-AUC & PR-AUC")
+        xticks = list(set(seq_len))
+        plt.xticks(ticks = xticks, labels=outcome_labels)
 
         plt.savefig(self.output_path + "distribution_plot.pdf", bbox_inches='tight')
 
+
     def plot_pr_auc( self ):
-        plt.figure(figsize=(10, 8))
+        plt.figure(figsize=(8, 8))
         model_subsets = [x for x in self.model_results if ("3D" not in x.label)]
+
         for rs in model_subsets:
             pr_auc = auc(rs.recall_vector, rs.precision_vector)
 
@@ -93,7 +101,7 @@ class ClassificationReport:
                 style = 'dashed'
 
             plt.plot(rs.recall_vector, rs.precision_vector, linewidth=1.5,
-                     linestyle=style, label=rs.label+' %0.3f' % pr_auc)
+                     linestyle=style, label=self.label_dict[rs.label]+' %0.3f' % pr_auc)
             plt.plot([0, 1], [1, 0], linewidth=1.5, linestyle='solid')
 
             plt.xlim([-0.01, 1])
@@ -105,9 +113,8 @@ class ClassificationReport:
 
         plt.savefig(self.output_path + "pr_auc.pdf", bbox_inches='tight')
 
-
     def plot_auc( self ):
-        plt.figure(figsize=(10, 8))
+        plt.figure(figsize=(8, 8))
         model_subsets = [x for x in self.model_results if ("3D" not in x.label)]
         for rs in model_subsets :
             fpr, tpr, _ = roc_curve(rs.y_true, rs.y_pred)
@@ -117,17 +124,46 @@ class ClassificationReport:
             else:
                 style = 'dashed'
 
-            plt.plot(fpr, tpr, linewidth=1.5, linestyle = style, label=rs.label+' %0.3f' % roc_auc)
+            plt.plot(fpr, tpr, linewidth=1.5, linestyle = style, label=self.label_dict[rs.label]+' %0.3f' % roc_auc)
             plt.plot([0, 0], [1, 1], linestyle = 'solid', linewidth=1.5)
 
             plt.xlim([-0.01, 1])
             plt.ylim([0, 1.01])
             plt.legend(loc='lower right')
             plt.title(' ROC Curve')
-            plt.ylabel('False Positive Rate')
-            plt.xlabel('True Positive Rate')
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
 
         plt.savefig(self.output_path + "auc.pdf", bbox_inches='tight')
+
+    def compare_lstim_xgboost(self, lstm_praucs):
+        xgb_praucs = []
+        outcomes = []
+        width = 0.35
+
+        for ms in self.model_results:
+            xgb_prauc = ms.get_pr_auc()
+            xgb_praucs.append(xgb_prauc)
+            outcomes.append(ms.label)
+
+        outcome_labels = [self.label_dict[k] for k in outcomes]
+        performance_differences = [x-y for (x,y) in zip(xgb_praucs,lstm_praucs)]
+        xindices = range(1, len(outcomes)+1)
+
+        plt.figure(figsize=(8, 8))
+        p1 = plt.bar(xindices, lstm_praucs, width)
+        p2 = plt.bar(xindices, performance_differences, width,
+                     bottom=lstm_praucs)
+
+        plt.ylabel('PR-AUC Contribution')
+        plt.title('Performance Per and Modules and Outcomes')
+        plt.xticks(xindices, outcome_labels)
+        #plt.yticks(np.arange(0, 81, 10))
+        plt.legend((p1[0], p2[0]), ('Dynamic-KD', 'Static-OP'))
+
+
+        plt.savefig(self.output_path + "xgboost_vs_lstm.pdf", bbox_inches='tight')
+
 
 class ModelResult:
     def __init__(self, label, y_true, y_pred_binary, best_threshold,

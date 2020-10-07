@@ -12,7 +12,6 @@ from Utils.Dictionary import aggregation
 
 SEED = 123 #used to help randomly select the data points
 
-
 def get_train_test_split(outcome_col, grouping_col):
     fold_ind, training_ind, testing_ind= stratified_group_k_fold(outcome_col,
                                                                  grouping_col, 3, seed=SEED)
@@ -108,35 +107,10 @@ def class_weights(y):
 
 
 def class_counts(y):
-    total = len(y)
     neg = np.count_nonzero(y == 0)
     pos = np.count_nonzero(y == 1)
-
     class_weight = {0 : neg, 1 : pos}
-
     return class_weight
-
-
-def generate_slopes(X, dynamic_columns, static_columns, id_col, training_groups):
-
-    slopes_df = pd.DataFrame()
-    slopes_df.insert(0, id_col, training_groups)
-
-    max_int = max(set([int(x.partition('_')[2])  for x in dynamic_columns]))
-    baseline_cols = [x for x in dynamic_columns if int(x.partition('_')[2]) ==0]
-    baseline_cols.sort()
-    last_cols = [x for x in dynamic_columns if int(x.partition('_')[2]) ==max_int]
-    last_cols.sort()
-    col_names = [x.partition('_')[0]+'_slope' for x in dynamic_columns if int(x.partition('_')[2]) ==max_int]
-    col_names.sort()
-
-    for i, j, k in zip(last_cols, baseline_cols, col_names):
-        new_col = X[i] - X[j]
-        slopes_df[k] = new_col
-
-    return slopes_df
-
-
 
 def generate_aggregates(X, dynamic_columns, id_col, training_groups):
     agg_df = pd.DataFrame()
@@ -189,14 +163,6 @@ def scale(df, scale_columns):
 
     print(" in scaling, columns are:", scale_columns, len(scale_columns))
     return normalized_df
-
-
-#def smote(X, y):
-
- #   oversample = SMOTE()
-  #  X, y = oversample.fit_resample(X, y)
-
-   # return X, y
 
 def smote(X, y):
     over = SMOTE(sampling_strategy=0.9)

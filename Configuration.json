@@ -54,19 +54,19 @@
 			"Mortality",
 			"ITUAdmission"
 		],
-		"regression_outcome": ["PO2/FIO2"],
-		"classification_labels": [
-			" 3D MOR",
-			" 5D MOR",
-			" 7D MOR",
-			"14D MOR",
-			"30D MOR",
-			" 3D ITU",
-			" 5D ITU",
-			" 7D ITU",
-			"14D ITU",
-			"30D ITU"
-		]
+		"classification_label": {
+			"Mortality3Days":" 3D MOR",
+			"Mortality5Days":" 5D MOR",
+			"Mortality7Days":" 7D MOR",
+			"Mortality14Days":"14D MOR",
+			"Mortality30Days":"30D MOR",
+			"ITUAdmission3Days":" 3D ITU",
+			"ITUAdmission5Days":" 5D ITU",
+			"ITUAdmission7Days":" 7D ITU",
+			"ITUAdmission14Days":"14D ITU",
+			"ITUAdmission30Days":"30D ITU"
+		},
+		"regression_outcome": ["PO2/FIO2"]
 	},
 	"training": {
 		"folds": 10,
